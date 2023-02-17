@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.OrTools" Version="9.5.2237" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="ATTAS_CORE">
+      <HintPath>..\ATTAS_CORE\bin\Debug\net6.0\ATTAS_CORE.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>
