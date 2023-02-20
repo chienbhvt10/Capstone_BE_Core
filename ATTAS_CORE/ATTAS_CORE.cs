@@ -1,4 +1,5 @@
-﻿using Google.OrTools.Sat;
+﻿
+using Google.OrTools.Sat;
 
 namespace ATTAS_CORE
 {
@@ -63,6 +64,9 @@ namespace ATTAS_CORE
         private CpModel model;
         // Desicion variable
         private Dictionary<(int, int), BoolVar> assigns;
+        private Dictionary<(int, int), BoolVar> instructorSubjectStatus;
+        private Dictionary<(int, int), LinearExpr> assignsProduct;
+        public int testStart { get; set; } = 30;
 
         /*
         ################################
@@ -73,7 +77,7 @@ namespace ATTAS_CORE
         public string solverOption { get; set; } = "ORTOOLS";
         public string strategyOption { get; set; } = "CONSTRAINTPROGRAMMING";
         public int[] objOption { get; set; } = new int[6] { 1, 1, 1, 1, 1, 1 };
-        
+
         /*
         ################################
         ||      SOLVER PARAMETER      ||
@@ -101,7 +105,7 @@ namespace ATTAS_CORE
         public int[,] instructorSubjectPreference { get; set; } = new int[0, 0];
         public int[,] instructorSlot { get; set; } = new int[0, 0];
         public int[,] instructorSlotPreference { get; set; } = new int[0, 0];
-        public List<(int,int,int)> instructorPreassign { get; set; } = new List<(int,int,int)>();
+        public List<(int, int, int)> instructorPreassign { get; set; } = new List<(int, int, int)>();
         public int[] instructorQuota { get; set; } = Array.Empty<int>();
         public int[] taskSubjectMapping { get; set; } = Array.Empty<int>();
         public int[] taskSlotMapping { get; set; } = Array.Empty<int>();
@@ -122,21 +126,15 @@ namespace ATTAS_CORE
             allInstructors = Enumerable.Range(0, numInstructors).ToArray();
             allAreas = Enumerable.Range(0, numAreas).ToArray();
 
-            //int capacity = 0;
-
             if (numBackupInstructors > 0)
             {
                 allInstructorsWithBackup = Enumerable.Range(0, numInstructors + 1).ToArray();
-                instructorQuota= instructorQuota.Concat(new int[] { numBackupInstructors }).ToArray();
-                //capacity += numTasks * (numInstructors + 1);
+                instructorQuota = instructorQuota.Concat(new int[] { numBackupInstructors }).ToArray();
             }
             else
             {
                 allInstructorsWithBackup = Enumerable.Range(0, numInstructors).ToArray();
-                //capacity += numTasks * numInstructors;
             }
-
-            //model.Model.Variables.Capacity = capacity;
         }
         public void createModel()
         {
@@ -144,15 +142,17 @@ namespace ATTAS_CORE
 
             assigns = new Dictionary<(int, int), BoolVar>();
             foreach (int n in allTasks)
-                foreach(int i in allInstructorsWithBackup)
-                    assigns.Add((n, i), model.NewBoolVar($"Tasks_n{n}i{i}"));
+                foreach (int i in allInstructorsWithBackup)
+                {
+                    assigns.Add((n, i), model.NewBoolVar($"n{n}i{i}"));
+                }
 
             List<ILiteral> literals = new List<ILiteral>();
             //C-00 EACH TASK ASSIGN TO ATLEAST ONE AND ONLY ONE
             foreach (int n in allTasks)
             {
-                foreach(int i in allInstructorsWithBackup)
-                        literals.Add(assigns[(n, i)]);
+                foreach (int i in allInstructorsWithBackup)
+                    literals.Add(assigns[(n, i)]);
                 model.AddExactlyOne(literals);
                 literals.Clear();
             }
@@ -167,12 +167,12 @@ namespace ATTAS_CORE
             }
             //C-01 NO SLOT CONFLICT
             List<LinearExpr> taskAssignedPerSlot = new List<LinearExpr>();
-            foreach(int i in allInstructors)
-                foreach(int s in allSlots)
+            foreach (int i in allInstructors)
+                foreach (int s in allSlots)
                 {
                     foreach (int n in allTasks)
-                        taskAssignedPerSlot.Add(assigns[(n, i)] * slotConflict[taskSlotMapping[n],s]);
-                    model.Add(LinearExpr.Sum(taskAssignedPerSlot) <=1);
+                        taskAssignedPerSlot.Add(assigns[(n, i)] * slotConflict[taskSlotMapping[n], s]);
+                    model.Add(LinearExpr.Sum(taskAssignedPerSlot) <= 1);
                     taskAssignedPerSlot.Clear();
                 }
             //C-02 PREASSIGN MUST BE SATISFY
@@ -190,7 +190,7 @@ namespace ATTAS_CORE
 
             //C-04 INSTRUCTOR MUST BE ABLE TO TEACH IN THAT SLOT
             foreach (int n in allTasks)
-                foreach(int i in allInstructors)
+                foreach (int i in allInstructors)
                     model.Add(instructorSlot[i, taskSlotMapping[n]] - assigns[(n, i)] > -1);
         }
         public void constraintOnly()
@@ -219,14 +219,33 @@ namespace ATTAS_CORE
         ################################
         */
         //O-01
-        public void objSlotCompatibility()
+        public LinearExpr objSlotCompatibilityCost()
         {
-      
+            List<LinearExpr> slotCompatibility_ = new List<LinearExpr>();
+            for (int n1 = 0; n1 < numTasks - 1; n1++)
+                for (int n2 = n1 + 1; n2 < numTasks; n2++)
+                {
+                    if (slotCompatibility[taskSlotMapping[n1], taskSlotMapping[n2]] == 0)
+                        continue;
+                    slotCompatibility_.Add(assignsProduct[(n1, n2)] * slotCompatibility[taskSlotMapping[n1], taskSlotMapping[n2]]);
+                }
+            return LinearExpr.Sum(slotCompatibility_);
         }
         //O-02
-        public void objSubjectDiversity()
+        public LinearExpr objSubjectDiversity()
         {
-
+            List<ILiteral> literals = new List<ILiteral>();
+            List<LinearExpr> subjectDiversity = new List<LinearExpr>();
+            foreach (int i in allInstructors)
+            {
+                foreach (int s in allSubjects)
+                    literals.Add(instructorSubjectStatus[(i, s)]);
+                subjectDiversity.Add(LinearExpr.Sum(literals));
+                literals.Clear();
+            }
+            IntVar obj = model.NewIntVar(0, numSubjects, "subjectDiversity");
+            model.AddMaxEquality(obj, subjectDiversity);
+            return obj;
         }
         //O-03
         public LinearExpr objQuotaReached()
@@ -235,7 +254,7 @@ namespace ATTAS_CORE
             foreach (int i in allInstructors)
             {
                 IntVar[] x = new IntVar[numTasks];
-                foreach(int n in allTasks)
+                foreach (int n in allTasks)
                     x[n] = assigns[(n, i)];
                 quotaDifference.Add(instructorQuota[i] - LinearExpr.Sum(x));
             }
@@ -244,9 +263,17 @@ namespace ATTAS_CORE
             return obj;
         }
         //O-04
-        public void objWalkingDistance()
+        public LinearExpr objWalkingDistance()
         {
-
+            List<LinearExpr> walkingDistance = new List<LinearExpr>();
+            for (int n1 = 0; n1 < numTasks - 1; n1++)
+                for (int n2 = n1 + 1; n2 < numTasks; n2++)
+                {
+                    if (areaSlotWeight[taskSlotMapping[n1], taskSlotMapping[n2]] == 0 || areaDistance[taskAreaMapping[n1], taskAreaMapping[n2]] == 0)
+                        continue;
+                    walkingDistance.Add(assignsProduct[(n1, n2)] * areaSlotWeight[taskSlotMapping[n1], taskSlotMapping[n2]] * areaDistance[taskAreaMapping[n1], taskAreaMapping[n2]]);
+                }
+            return LinearExpr.Sum(walkingDistance);   
         }
         //O-05
         public LinearExpr objSubjectPreference()
@@ -257,8 +284,8 @@ namespace ATTAS_CORE
             {
                 foreach (int i in allInstructors)
                 {
-                    assignedTasks[n * numInstructors + i] = assigns[(n,i)];
-                    assignedTaskSubjectPreferences[n * numInstructors + i] = instructorSubjectPreference[i,taskSubjectMapping[n]];
+                    assignedTasks[n * numInstructors + i] = assigns[(n, i)];
+                    assignedTaskSubjectPreferences[n * numInstructors + i] = instructorSubjectPreference[i, taskSubjectMapping[n]];
                 }
             }
             return LinearExpr.WeightedSum(assignedTasks, assignedTaskSubjectPreferences);
@@ -286,7 +313,7 @@ namespace ATTAS_CORE
             // Tell the solver to enumerate all solutions.
             solver.StringParameters += "linearization_level:0 " + $"max_time_in_seconds:{maxSearchingTimeOption} ";
             //O-03 MINIMIZE QUOTA DIFF
-            if (objOption[4] > 0)
+            if (objOption[2] > 0)
             {
                 model.Minimize(objQuotaReached());
                 CpSolverStatus status = solver.Solve(model);
@@ -307,7 +334,7 @@ namespace ATTAS_CORE
                 Console.WriteLine($"  status: {status}");
                 Console.WriteLine($"  conflicts: {solver.NumConflicts()}");
                 Console.WriteLine($"  branches : {solver.NumBranches()}");
-                Console.WriteLine($"  wall time: {solver.WallTime()}s"); 
+                Console.WriteLine($"  wall time: {solver.WallTime()}s");
             }
             //O-06 MAXIMIZE SLOT PREFERENCE
             if (objOption[5] > 0)
@@ -321,10 +348,87 @@ namespace ATTAS_CORE
                 Console.WriteLine($"  branches : {solver.NumBranches()}");
                 Console.WriteLine($"  wall time: {solver.WallTime()}s");
             }
+            // O-02 MINIMIZE SUBJECT DIVERSITY
             if (objOption[1] > 0)
             {
+                instructorSubjectStatus = new Dictionary<(int, int), BoolVar>();
+                List<ILiteral> literals = new List<ILiteral>();
+                foreach (int i in allInstructors)
+                    foreach (int s in allSubjects)
+                    {
+                        foreach (int n in allTasks)
+                            if (taskSubjectMapping[n] == s)
+                                literals.Add(assigns[(n, i)]);
+                        instructorSubjectStatus.Add((i, s), model.NewBoolVar($"i{i}s{s}"));
+                        model.Add(LinearExpr.Sum(literals) > 0).OnlyEnforceIf(instructorSubjectStatus[(i, s)]);
+                        model.Add(LinearExpr.Sum(literals) == 0).OnlyEnforceIf(instructorSubjectStatus[(i, s)].Not());
+                        literals.Clear();
+                    }
 
+                model.Minimize(objSubjectDiversity());
+                CpSolverStatus status = solver.Solve(model);
+                Console.WriteLine("Statistics");
+                Console.WriteLine($"  Subject Diversity: {solver.ObjectiveValue}");
+                Console.WriteLine($"  status: {status}");
+                Console.WriteLine($"  conflicts: {solver.NumConflicts()}");
+                Console.WriteLine($"  branches : {solver.NumBranches()}");
+                Console.WriteLine($"  wall time: {solver.WallTime()}s");
             }
+            if (objOption[0] > 0 || objOption[3] > 0)
+            {
+                /*
+                // OPTIMIZE IF POSSIBLE 
+                // THIS IS x^2 OPTIMIZATION
+                // MODEL SPEED DEPEND ON NUMBER OF VARIABLE
+                // REDUCE VARIABLE IF POSSIBLE
+                */
+                assignsProduct = new Dictionary<(int, int), LinearExpr>();
+                List<LinearExpr> mul = new List<LinearExpr>();
+                List<LinearExpr> tmp = new List<LinearExpr>();
+                for (int n1 = 0; n1 < numTasks-1;  n1++)
+                    for (int n2 = n1+1; n2 < numTasks ; n2++)
+                    {
+                        /// REDUCE REDUNDANCE MODEL VARIABLE
+                        if ( (areaSlotWeight[taskSlotMapping[n1], taskSlotMapping[n2]] == 0 || areaDistance[taskAreaMapping[n1], taskAreaMapping[n2]] == 0) && slotCompatibility[taskSlotMapping[n1], taskSlotMapping[n2]] == 0)
+                            continue;
+                        for (int i = testStart; i < numInstructors; i ++)
+                        {
+                            mul.Add(assigns[(n1, i)]);
+                            mul.Add(assigns[(n2, i)]);
+                            LinearExpr product = model.NewBoolVar("");
+                            model.AddMultiplicationEquality(product, mul);
+                            tmp.Add(product);
+                            mul.Clear();
+                        }
+                        assignsProduct.Add((n1, n2), LinearExpr.Sum(tmp));
+                        tmp.Clear();
+                    }
+            }
+            //O-01 MAXIMIZE SLOT COMPATIBILITY
+            if (objOption[0] > 0)
+            {
+                model.Minimize(objSlotCompatibilityCost());
+                CpSolverStatus status = solver.Solve(model);
+                Console.WriteLine("Statistics");
+                Console.WriteLine($"  Slot Compatibility Cost: {solver.ObjectiveValue}");
+                Console.WriteLine($"  status: {status}");
+                Console.WriteLine($"  conflicts: {solver.NumConflicts()}");
+                Console.WriteLine($"  branches : {solver.NumBranches()}");
+                Console.WriteLine($"  wall time: {solver.WallTime()}s");
+            }
+            //O-04 MINIMIZE WALKING DISTANCE
+            if (objOption[3] > 0 )
+            {
+                model.Minimize(objWalkingDistance());
+                CpSolverStatus status = solver.Solve(model);
+                Console.WriteLine("Statistics");
+                Console.WriteLine($"  Walking Distance: {solver.ObjectiveValue}");
+                Console.WriteLine($"  status: {status}");
+                Console.WriteLine($"  conflicts: {solver.NumConflicts()}");
+                Console.WriteLine($"  branches : {solver.NumBranches()}");
+                Console.WriteLine($"  wall time: {solver.WallTime()}s");
+            }
+        }
         public void ortools()
         {
             if (objOption.Sum() == 0)
@@ -337,7 +441,7 @@ namespace ATTAS_CORE
         ||          MAIN HUB          ||
         ################################
         */
-        public void solve()
+            public void solve()
         {
             switch (solverOption)
             {
