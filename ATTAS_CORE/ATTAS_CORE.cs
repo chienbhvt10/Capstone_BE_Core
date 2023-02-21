@@ -10,35 +10,40 @@ namespace ATTAS_CORE
         private int[] allInstructors_;
         private Dictionary<(int, int), BoolVar> assigns_;
         private int solutionLimit_;
+        private bool print_;
         public SolutionPrinter(int[] allInstructorsWithBackup, int[] allTasks,
-                               Dictionary<(int, int), BoolVar> assigns, int limit)
+                               Dictionary<(int, int), BoolVar> assigns, int limit,bool print)
         {
             solutionCount_ = 0;
             allInstructors_ = allInstructorsWithBackup;
             allTasks_ = allTasks;
             assigns_ = assigns;
             solutionLimit_ = limit;
+            print_= print;
         }
 
         public override void OnSolutionCallback()
         {
-            Console.WriteLine($"Solution #{solutionCount_}:");
-            foreach (int n in allTasks_)
+            if (print_)
             {
-                bool isAssigned = false;
-                foreach (int i in allInstructors_)
+                Console.WriteLine($"Solution #{solutionCount_}:");
+                foreach (int n in allTasks_)
                 {
-                    if (Value(assigns_[(n, i)]) == 1L)
+                    bool isAssigned = false;
+                    foreach (int i in allInstructors_)
                     {
-                        isAssigned = true;
-                        Console.WriteLine($" Task {n} assigned to instructor {i}");
+                        if (Value(assigns_[(n, i)]) == 1L)
+                        {
+                            isAssigned = true;
+                            Console.WriteLine($" Task {n} assigned to instructor {i}");
+                        }
                     }
+                    if (!isAssigned)
+                    {
+                        Console.WriteLine($" Task {n} need backup instructor!");
+                    }
+
                 }
-                if (!isAssigned)
-                {
-                    Console.WriteLine($" Task {n} need backup instructor!");
-                }
-                
             }
             solutionCount_++;
             if (solutionCount_ >= solutionLimit_)
@@ -66,7 +71,6 @@ namespace ATTAS_CORE
         private Dictionary<(int, int), BoolVar> assigns;
         private Dictionary<(int, int), BoolVar> instructorSubjectStatus;
         private Dictionary<(int, int), LinearExpr> assignsProduct;
-        public int testStart { get; set; } = 30;
 
         /*
         ################################
@@ -74,9 +78,11 @@ namespace ATTAS_CORE
         ################################
         */
         public double maxSearchingTimeOption { get; set; } = 30.0;
-        public string solverOption { get; set; } = "ORTOOLS";
-        public string strategyOption { get; set; } = "CONSTRAINTPROGRAMMING";
+        public int solverOption { get; set; } = 1;
+        public int strategyOption { get; set; } = 2;
         public int[] objOption { get; set; } = new int[6] { 1, 1, 1, 1, 1, 1 };
+        public int[] objWeight { get; set; } = new int[6] { 1, 1, 1, 1, 1, 1 };
+        public bool debugLoggerOption { get; set; } = false;
 
         /*
         ################################
@@ -97,7 +103,7 @@ namespace ATTAS_CORE
         private int[] allSlots = Array.Empty<int>();
         private int[] allInstructors = Array.Empty<int>();
         private int[] allInstructorsWithBackup = Array.Empty<int>();
-        private int[] allAreas = Array.Empty<int>();
+        //private int[] allAreas = Array.Empty<int>();
         //INPUT DATA
         public int[,] slotConflict { get; set; } = new int[0, 0];
         public int[,] slotCompatibility { get; set; } = new int[0, 0];
@@ -124,7 +130,7 @@ namespace ATTAS_CORE
             allTasks = Enumerable.Range(0, numTasks).ToArray();
             allSlots = Enumerable.Range(0, numSlots).ToArray();
             allInstructors = Enumerable.Range(0, numInstructors).ToArray();
-            allAreas = Enumerable.Range(0, numAreas).ToArray();
+            //allAreas = Enumerable.Range(0, numAreas).ToArray();
 
             if (numBackupInstructors > 0)
             {
@@ -193,25 +199,29 @@ namespace ATTAS_CORE
                 foreach (int i in allInstructors)
                     model.Add(instructorSlot[i, taskSlotMapping[n]] - assigns[(n, i)] > -1);
         }
-        public void constraintOnly()
+        public List<(int, int)> constraintOnly()
         {
             setSolverCount();
             createModel();
             CpSolver solver = new CpSolver();
             // Tell the solver to enumerate all solutions.
-            solver.StringParameters += "linearization_level:0 " + "enumerate_all_solutions:true " + $"max_time_in_seconds:{maxSearchingTimeOption} ";
-
-            // Display the first five solutions.
-            const int solutionLimit = 1;
-            SolutionPrinter cb = new SolutionPrinter(allInstructors, allTasks, assigns, solutionLimit);
-
+            Random rnd = new Random();
+            solver.StringParameters += "linearization_level:0 " + "enumerate_all_solutions:true " + $"max_time_in_seconds:{maxSearchingTimeOption} " + $"random_seed:{rnd.Next(1, 31)} ";
+            int solutionLimit = 1;
+            SolutionPrinter cb = new SolutionPrinter(allInstructors, allTasks, assigns, solutionLimit, debugLoggerOption);
             CpSolverStatus status = solver.Solve(model, cb);
 
-            Console.WriteLine("Statistics");
-            Console.WriteLine($"  status: {status}");
-            Console.WriteLine($"  conflicts: {solver.NumConflicts()}");
-            Console.WriteLine($"  branches : {solver.NumBranches()}");
-            Console.WriteLine($"  wall time: {solver.WallTime()}s");
+            if (debugLoggerOption)
+            {
+                Console.WriteLine("Statistics");
+                Console.WriteLine($"  Solution selected: {solutionLimit}");
+                Console.WriteLine($"  status: {status}");
+                Console.WriteLine($"  conflicts: {solver.NumConflicts()}");
+                Console.WriteLine($"  branches : {solver.NumBranches()}");
+                Console.WriteLine($"  wall time: {solver.WallTime()}s");
+            }
+
+            return getResults(solver);
         }
         /*
         ################################
@@ -273,7 +283,7 @@ namespace ATTAS_CORE
                         continue;
                     walkingDistance.Add(assignsProduct[(n1, n2)] * areaSlotWeight[taskSlotMapping[n1], taskSlotMapping[n2]] * areaDistance[taskAreaMapping[n1], taskAreaMapping[n2]]);
                 }
-            return LinearExpr.Sum(walkingDistance);   
+            return LinearExpr.Sum(walkingDistance);
         }
         //O-05
         public LinearExpr objSubjectPreference()
@@ -305,48 +315,59 @@ namespace ATTAS_CORE
             }
             return LinearExpr.WeightedSum(assignedTasks, assignedTaskSlotPreferences);
         }
-        public void objectiveOptimize()
+        public List<(int, int)>? objectiveOptimize()
         {
             setSolverCount();
             createModel();
             CpSolver solver = new CpSolver();
-            // Tell the solver to enumerate all solutions.
+            CpSolverStatus status = new CpSolverStatus();
             solver.StringParameters += "linearization_level:0 " + $"max_time_in_seconds:{maxSearchingTimeOption} ";
+
+            List<int> weights = new List<int>();
+            List<LinearExpr> totalDeltas = new List<LinearExpr>();
             //O-03 MINIMIZE QUOTA DIFF
             if (objOption[2] > 0)
             {
-                model.Minimize(objQuotaReached());
-                CpSolverStatus status = solver.Solve(model);
-                Console.WriteLine("Statistics");
-                Console.WriteLine($"  Quota difference: {solver.ObjectiveValue}");
-                Console.WriteLine($"  status: {status}");
-                Console.WriteLine($"  conflicts: {solver.NumConflicts()}");
-                Console.WriteLine($"  branches : {solver.NumBranches()}");
-                Console.WriteLine($"  wall time: {solver.WallTime()}s");
+                switch (strategyOption)
+                {
+                    case 1:
+                        weights.Add(objWeight[2]);
+                        totalDeltas.Add(objQuotaReached());
+                        break;
+                    case 2:
+                        totalDeltas.Add(createDelta(numTasks, objQuotaReached(), 0));
+                        break;
+                }
             }
             //O-05 MAXIMIZE SUBJECT PREFERENCE
             if (objOption[4] > 0)
             {
-                model.Maximize(objSubjectPreference());
-                CpSolverStatus status = solver.Solve(model);
-                Console.WriteLine("Statistics");
-                Console.WriteLine($"  Subject Preference: {solver.ObjectiveValue}");
-                Console.WriteLine($"  status: {status}");
-                Console.WriteLine($"  conflicts: {solver.NumConflicts()}");
-                Console.WriteLine($"  branches : {solver.NumBranches()}");
-                Console.WriteLine($"  wall time: {solver.WallTime()}s");
+                switch (strategyOption)
+                {
+                    case 1:
+                        weights.Add(-1 * objWeight[4]);
+                        totalDeltas.Add(objSubjectPreference());
+                        break;
+                    case 2:
+                        totalDeltas.Add(createDelta(numTasks * 5, objSubjectPreference(), numTasks * 5));
+                        break;
+                }
+                
             }
             //O-06 MAXIMIZE SLOT PREFERENCE
             if (objOption[5] > 0)
             {
-                model.Maximize(objSlotPreference());
-                CpSolverStatus status = solver.Solve(model);
-                Console.WriteLine("Statistics");
-                Console.WriteLine($"  Slot Preference: {solver.ObjectiveValue}");
-                Console.WriteLine($"  status: {status}");
-                Console.WriteLine($"  conflicts: {solver.NumConflicts()}");
-                Console.WriteLine($"  branches : {solver.NumBranches()}");
-                Console.WriteLine($"  wall time: {solver.WallTime()}s");
+                switch (strategyOption)
+                {
+                    case 1:
+                        weights.Add(-1 * objWeight[5]);
+                        totalDeltas.Add(objSlotPreference());
+                        break;
+                    case 2:
+                        totalDeltas.Add(createDelta(numTasks * 5, objSlotPreference(), numTasks * 5));
+                        break;
+                }
+                
             }
             // O-02 MINIMIZE SUBJECT DIVERSITY
             if (objOption[1] > 0)
@@ -364,35 +385,40 @@ namespace ATTAS_CORE
                         model.Add(LinearExpr.Sum(literals) == 0).OnlyEnforceIf(instructorSubjectStatus[(i, s)].Not());
                         literals.Clear();
                     }
-
-                model.Minimize(objSubjectDiversity());
-                CpSolverStatus status = solver.Solve(model);
-                Console.WriteLine("Statistics");
-                Console.WriteLine($"  Subject Diversity: {solver.ObjectiveValue}");
-                Console.WriteLine($"  status: {status}");
-                Console.WriteLine($"  conflicts: {solver.NumConflicts()}");
-                Console.WriteLine($"  branches : {solver.NumBranches()}");
-                Console.WriteLine($"  wall time: {solver.WallTime()}s");
+                switch (strategyOption)
+                {
+                    case 1:
+                        weights.Add(objWeight[1]);
+                        totalDeltas.Add(objSubjectDiversity());
+                        break;
+                    case 2:
+                        totalDeltas.Add(createDelta(numSubjects, objSubjectDiversity(), 0));
+                        break;
+                }
+                
             }
             if (objOption[0] > 0 || objOption[3] > 0)
             {
                 /*
-                // OPTIMIZE IF POSSIBLE 
-                // THIS IS x^2 OPTIMIZATION
-                // MODEL SPEED DEPEND ON NUMBER OF VARIABLE
-                // REDUCE VARIABLE IF POSSIBLE
+                OPTIMIZE IF POSSIBLE 
+                THIS IS x^2 OPTIMIZATION
+                MODEL SPEED DEPEND ON NUMBER OF VARIABLE
+                REDUCE VARIABLE IF POSSIBLE
                 */
                 assignsProduct = new Dictionary<(int, int), LinearExpr>();
                 List<LinearExpr> mul = new List<LinearExpr>();
                 List<LinearExpr> tmp = new List<LinearExpr>();
-                for (int n1 = 0; n1 < numTasks-1;  n1++)
-                    for (int n2 = n1+1; n2 < numTasks ; n2++)
+                for (int n1 = 0; n1 < numTasks - 1; n1++)
+                    for (int n2 = n1 + 1; n2 < numTasks; n2++)
                     {
-                        /// REDUCE REDUNDANCE MODEL VARIABLE
-                        if ( (areaSlotWeight[taskSlotMapping[n1], taskSlotMapping[n2]] == 0 || areaDistance[taskAreaMapping[n1], taskAreaMapping[n2]] == 0) && slotCompatibility[taskSlotMapping[n1], taskSlotMapping[n2]] == 0)
+                        // REDUCE MODEL VARIABLE WASTE
+                        if ((areaSlotWeight[taskSlotMapping[n1], taskSlotMapping[n2]] == 0 || areaDistance[taskAreaMapping[n1], taskAreaMapping[n2]] == 0) && slotCompatibility[taskSlotMapping[n1], taskSlotMapping[n2]] == 0)
                             continue;
-                        for (int i = testStart; i < numInstructors; i ++)
+                        foreach (int i in allInstructors)
                         {
+                            // REDUCE MODEL VARIABLE WASTE
+                            if (instructorSlot[i, taskSlotMapping[n1]] == 0 || instructorSlot[i, taskSlotMapping[n2]] == 0 || instructorSubject[i, taskSubjectMapping[n1]] == 0 || instructorSubject[i, taskSubjectMapping[n2]] == 0)
+                                continue;
                             mul.Add(assigns[(n1, i)]);
                             mul.Add(assigns[(n2, i)]);
                             LinearExpr product = model.NewBoolVar("");
@@ -404,51 +430,124 @@ namespace ATTAS_CORE
                         tmp.Clear();
                     }
             }
-            //O-01 MAXIMIZE SLOT COMPATIBILITY
+            //O-01 MINIMIZE SLOT COMPATIBILITY COST
             if (objOption[0] > 0)
             {
-                model.Minimize(objSlotCompatibilityCost());
-                CpSolverStatus status = solver.Solve(model);
-                Console.WriteLine("Statistics");
-                Console.WriteLine($"  Slot Compatibility Cost: {solver.ObjectiveValue}");
-                Console.WriteLine($"  status: {status}");
-                Console.WriteLine($"  conflicts: {solver.NumConflicts()}");
-                Console.WriteLine($"  branches : {solver.NumBranches()}");
-                Console.WriteLine($"  wall time: {solver.WallTime()}s");
+                switch (strategyOption)
+                {
+                    case 1:
+                        weights.Add(objWeight[0]);
+                        totalDeltas.Add(objSlotCompatibilityCost());
+                        break;
+                    case 2:
+                        totalDeltas.Add(createDelta(numTasks * numTasks * 5, objSlotCompatibilityCost(), 0));
+                        break;
+                }
+                
             }
             //O-04 MINIMIZE WALKING DISTANCE
-            if (objOption[3] > 0 )
+            if (objOption[3] > 0)
             {
-                model.Minimize(objWalkingDistance());
-                CpSolverStatus status = solver.Solve(model);
+                switch (strategyOption)
+                {
+                    case 1:
+                        weights.Add(objWeight[3]);
+                        totalDeltas.Add(objWalkingDistance());
+                        break;
+                    case 2:
+                        totalDeltas.Add(createDelta(numTasks * numTasks * 5 * 5, objWalkingDistance(), 0));
+                        break;
+                }
+            }
+            switch (strategyOption)
+            {
+                case 1:
+                    model.Minimize(LinearExpr.WeightedSum(totalDeltas,weights));
+                    break;
+                case 2:
+                    model.Minimize(LinearExpr.Sum(totalDeltas));
+                    break;
+                case 3:
+                    model.Minimize(LinearExpr.Sum(totalDeltas));
+                    break;
+            }
+            status = solver.Solve(model);
+            if (debugLoggerOption)
+            {
                 Console.WriteLine("Statistics");
-                Console.WriteLine($"  Walking Distance: {solver.ObjectiveValue}");
+                Console.WriteLine($"  {strategyOption}: {solver.ObjectiveValue}");
                 Console.WriteLine($"  status: {status}");
                 Console.WriteLine($"  conflicts: {solver.NumConflicts()}");
                 Console.WriteLine($"  branches : {solver.NumBranches()}");
                 Console.WriteLine($"  wall time: {solver.WallTime()}s");
             }
+            if (status == CpSolverStatus.Optimal || status == CpSolverStatus.Feasible)
+                return getResults(solver);
+            else return null;
         }
-        public void ortools()
+        /*
+        ################################
+        ||          Utility           ||
+        ################################
+        */
+        public LinearExpr createDelta(int maxDelta,LinearExpr actualValue,int targetValue)
+        {
+            IntVar delta = model.NewIntVar(0, maxDelta, "");
+            model.Add(actualValue <= targetValue + delta);
+            model.Add(actualValue >= targetValue - delta);
+            return delta;
+        }
+        public List<(int,int)> getResults(CpSolver solver)
+        {
+            List<(int,int)> results = new List<(int,int)> ();
+            foreach (int n in allTasks)
+            {
+                bool isAssigned = false;
+                foreach (int i in allInstructors)
+                {
+                    if (solver.Value(assigns[(n, i)]) == 1L)
+                    {
+                        isAssigned = true;
+                        results.Add((n, i));
+                    }
+                }
+                if (!isAssigned)
+                {
+                    results.Add((n, -1));
+                }
+            }
+            return results;
+        }
+        public List<(int, int)>? ortools()
         {
             if (objOption.Sum() == 0)
-                constraintOnly();
+                return constraintOnly();
             else
-                objectiveOptimize();
+                return objectiveOptimize();
         }
         /*
         ################################
         ||          MAIN HUB          ||
         ################################
         */
-            public void solve()
+        public List<(int, int)>? solve()
         {
+            /*  Solver
+             *  1: OR-TOOLS  ( 1,2,3 )
+             *  2: CPLEX ( 1 , 2 , 3 )
+             *  3: NGSA-II ( 4 )
+             *  Strategy
+             *  1: Scalazation
+             *  2: Constraint Programming
+             *  3: Compromise Programming
+             *  4: Pareto-based
+             */
             switch (solverOption)
             {
-                case "ORTOOLS":
-                    ortools();
-                    break;
+                case 1:
+                    return ortools();
             }
+            return null;
             
         }
     }

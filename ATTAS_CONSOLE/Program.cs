@@ -1,16 +1,18 @@
 ﻿// See https://aka.ms/new-console-template for more information
 using ATTAS_CORE;
+
 ATTAS attas = new ATTAS();
 
-attas.objOption = new int[6] { 1, 1, 1, 1, 1, 1 };
-attas.maxSearchingTimeOption = 30.0;
+attas.objOption = new int[6] { 0, 1, 1, 1, 1, 1 };
+attas.maxSearchingTimeOption = 120.0;
 attas.numSubjects = 14;
 attas.numTasks = 162;
 attas.numSlots = 22;
 attas.numInstructors = 34;
 attas.numBackupInstructors = 0;
 attas.numAreas = 3;
-attas.testStart= 0;
+attas.debugLoggerOption= true;
+attas.strategyOption = 2;
 attas.slotConflict = new int[,]
 {
     {1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0} ,
@@ -279,4 +281,12 @@ attas.areaSlotWeight = new int[,]
 //attas.instructorPreassign = new List<(int, int, int)> { (32, 0, 1), (32, 1, 1), (32, 2, 1) };
 
 
-attas.solve();
+List<(int,int)> results = attas.solve();
+if (results != null)
+    foreach ((int, int) result in results)
+        if (result.Item2 >= 0)
+            Console.WriteLine($"Tasks {result.Item1} assigned to instructor {result.Item2}");
+        else
+            Console.WriteLine($"Tasks {result.Item1} need backup instructor!");
+else
+    Console.WriteLine("No Solution");
