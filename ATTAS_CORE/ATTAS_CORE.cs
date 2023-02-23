@@ -1,5 +1,4 @@
-﻿
-using Google.OrTools.Sat;
+﻿using Google.OrTools.Sat;
 
 namespace ATTAS_CORE
 {
@@ -62,18 +61,6 @@ namespace ATTAS_CORE
     {
         /*
         ################################
-        ||           MODEL            ||
-        ################################
-         */
-
-        private CpModel model;
-        // Desicion variable
-        private Dictionary<(int, int), BoolVar> assigns;
-        private Dictionary<(int, int), BoolVar> instructorSubjectStatus;
-        private Dictionary<(int, int), LinearExpr> assignsProduct;
-
-        /*
-        ################################
         ||           Option           ||
         ################################
         */
@@ -106,7 +93,7 @@ namespace ATTAS_CORE
         //private int[] allAreas = Array.Empty<int>();
         //INPUT DATA
         public int[,] slotConflict { get; set; } = new int[0, 0];
-        public int[,] slotCompatibility { get; set; } = new int[0, 0];
+        public int[,] slotCompatibilityCost { get; set; } = new int[0, 0];
         public int[,] instructorSubject { get; set; } = new int[0, 0];
         public int[,] instructorSubjectPreference { get; set; } = new int[0, 0];
         public int[,] instructorSlot { get; set; } = new int[0, 0];
@@ -121,9 +108,21 @@ namespace ATTAS_CORE
 
         /*
         ################################
-        ||          OR-TOOLS          ||
+        ||       START OR-TOOLS       ||
         ################################
         */
+
+        /*
+        ################################
+        ||           MODEL            ||
+        ################################
+         */
+
+        private CpModel model;
+        // Desicion variable
+        private Dictionary<(int, int), BoolVar> assigns;
+        private Dictionary<(int, int), BoolVar> instructorSubjectStatus;
+        private Dictionary<(int, int), LinearExpr> assignsProduct;
         public void setSolverCount()
         {
             allSubjects = Enumerable.Range(0, numSubjects).ToArray();
@@ -235,9 +234,9 @@ namespace ATTAS_CORE
             for (int n1 = 0; n1 < numTasks - 1; n1++)
                 for (int n2 = n1 + 1; n2 < numTasks; n2++)
                 {
-                    if (slotCompatibility[taskSlotMapping[n1], taskSlotMapping[n2]] == 0)
+                    if (slotCompatibilityCost[taskSlotMapping[n1], taskSlotMapping[n2]] == 0)
                         continue;
-                    slotCompatibility_.Add(assignsProduct[(n1, n2)] * slotCompatibility[taskSlotMapping[n1], taskSlotMapping[n2]]);
+                    slotCompatibility_.Add(assignsProduct[(n1, n2)] * slotCompatibilityCost[taskSlotMapping[n1], taskSlotMapping[n2]]);
                 }
             return LinearExpr.Sum(slotCompatibility_);
         }
@@ -337,6 +336,9 @@ namespace ATTAS_CORE
                     case 2:
                         totalDeltas.Add(createDelta(numTasks, objQuotaReached(), 0));
                         break;
+                    case 3:
+                        totalDeltas.Add(createPow2(objQuotaReached(), 0));
+                        break;
                 }
             }
             //O-05 MAXIMIZE SUBJECT PREFERENCE
@@ -350,6 +352,9 @@ namespace ATTAS_CORE
                         break;
                     case 2:
                         totalDeltas.Add(createDelta(numTasks * 5, objSubjectPreference(), numTasks * 5));
+                        break;
+                    case 3:
+                        totalDeltas.Add(createPow2(objSubjectPreference(),numTasks*5));
                         break;
                 }
                 
@@ -365,6 +370,9 @@ namespace ATTAS_CORE
                         break;
                     case 2:
                         totalDeltas.Add(createDelta(numTasks * 5, objSlotPreference(), numTasks * 5));
+                        break;
+                    case 3:
+                        totalDeltas.Add(createPow2(objSlotPreference(),numTasks*5));
                         break;
                 }
                 
@@ -394,25 +402,29 @@ namespace ATTAS_CORE
                     case 2:
                         totalDeltas.Add(createDelta(numSubjects, objSubjectDiversity(), 0));
                         break;
+                    case 3:
+                        totalDeltas.Add(createPow2(objSubjectDiversity(), 0));
+                        break;
                 }
                 
             }
             if (objOption[0] > 0 || objOption[3] > 0)
             {
                 /*
-                OPTIMIZE IF POSSIBLE 
-                THIS IS x^2 OPTIMIZATION
+                NEED FURTHER OPTIMIZE
+                THIS OBJECTIVE REQUIRE NON LINEAR OPTIMIZE
                 MODEL SPEED DEPEND ON NUMBER OF VARIABLE
-                REDUCE VARIABLE IF POSSIBLE
+                REDUCE VARIABLE WASTE BY ADDING MORE FILTER
                 */
                 assignsProduct = new Dictionary<(int, int), LinearExpr>();
                 List<LinearExpr> mul = new List<LinearExpr>();
                 List<LinearExpr> tmp = new List<LinearExpr>();
+                // symmetry breaking 
                 for (int n1 = 0; n1 < numTasks - 1; n1++)
                     for (int n2 = n1 + 1; n2 < numTasks; n2++)
                     {
                         // REDUCE MODEL VARIABLE WASTE
-                        if ((areaSlotWeight[taskSlotMapping[n1], taskSlotMapping[n2]] == 0 || areaDistance[taskAreaMapping[n1], taskAreaMapping[n2]] == 0) && slotCompatibility[taskSlotMapping[n1], taskSlotMapping[n2]] == 0)
+                        if ((areaSlotWeight[taskSlotMapping[n1], taskSlotMapping[n2]] == 0 || areaDistance[taskAreaMapping[n1], taskAreaMapping[n2]] == 0) && slotCompatibilityCost[taskSlotMapping[n1], taskSlotMapping[n2]] == 0)
                             continue;
                         foreach (int i in allInstructors)
                         {
@@ -442,6 +454,9 @@ namespace ATTAS_CORE
                     case 2:
                         totalDeltas.Add(createDelta(numTasks * numTasks * 5, objSlotCompatibilityCost(), 0));
                         break;
+                    case 3:
+                        totalDeltas.Add(createPow2(objSlotCompatibilityCost(), 0));
+                        break;
                 }
                 
             }
@@ -456,6 +471,9 @@ namespace ATTAS_CORE
                         break;
                     case 2:
                         totalDeltas.Add(createDelta(numTasks * numTasks * 5 * 5, objWalkingDistance(), 0));
+                        break;
+                    case 3:
+                        totalDeltas.Add(createPow2(objWalkingDistance(), 0));
                         break;
                 }
             }
@@ -497,6 +515,15 @@ namespace ATTAS_CORE
             model.Add(actualValue >= targetValue - delta);
             return delta;
         }
+        public LinearExpr createPow2(LinearExpr actualValue,int targetValue)
+        {
+            IntVar obj = model.NewIntVar(0, Int32.MaxValue, "");
+            List<LinearExpr> linearExprs= new List<LinearExpr>();
+            linearExprs.Add(actualValue - targetValue);
+            linearExprs.Add(actualValue - targetValue);
+            model.AddMultiplicationEquality(obj, linearExprs);
+            return obj;
+        }
         public List<(int,int)> getResults(CpSolver solver)
         {
             List<(int,int)> results = new List<(int,int)> ();
@@ -525,6 +552,12 @@ namespace ATTAS_CORE
             else
                 return objectiveOptimize();
         }
+        /*
+        ################################
+        ||        END OR-TOOLS        ||
+        ################################
+         */
+
         /*
         ################################
         ||          MAIN HUB          ||
