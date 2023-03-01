@@ -1,4 +1,5 @@
 ﻿using Google.OrTools.Sat;
+using System.Runtime.Serialization.Formatters;
 
 namespace ATTAS_CORE
 {
@@ -202,25 +203,31 @@ namespace ATTAS_CORE
         {
             setSolverCount();
             createModel();
+            List<ILiteral> obj = new List<ILiteral> ();
+            foreach (int n in allTasks)
+                foreach (int i in allInstructors)
+                    obj.Add(assigns[(n, i)]);
+            model.Minimize( createDelta( numTasks ,LinearExpr.Sum(obj),numTasks ));
             CpSolver solver = new CpSolver();
+            solver.StringParameters += "linearization_level:0 " + $"max_time_in_seconds:{maxSearchingTimeOption} ";
             // Tell the solver to enumerate all solutions.
-            Random rnd = new Random();
-            solver.StringParameters += "linearization_level:0 " + "enumerate_all_solutions:true " + $"max_time_in_seconds:{maxSearchingTimeOption} " + $"random_seed:{rnd.Next(1, 31)} ";
-            int solutionLimit = 1;
-            SolutionPrinter cb = new SolutionPrinter(allInstructors, allTasks, assigns, solutionLimit, debugLoggerOption);
-            CpSolverStatus status = solver.Solve(model, cb);
+            //solver.StringParameters += "linearization_level:0 " + "enumerate_all_solutions:true " + $"max_time_in_seconds:{maxSearchingTimeOption} " + $"random_seed:{rnd.Next(1, 31)} ";
+            //int solutionLimit = 1;
+            //SolutionPrinter cb = new SolutionPrinter(allInstructors, allTasks, assigns, solutionLimit, debugLoggerOption);
+            CpSolverStatus status = solver.Solve(model);
 
             if (debugLoggerOption)
             {
                 Console.WriteLine("Statistics");
-                Console.WriteLine($"  Solution selected: {solutionLimit}");
+                Console.WriteLine($"  {strategyOption}: {solver.ObjectiveValue}");
                 Console.WriteLine($"  status: {status}");
                 Console.WriteLine($"  conflicts: {solver.NumConflicts()}");
                 Console.WriteLine($"  branches : {solver.NumBranches()}");
                 Console.WriteLine($"  wall time: {solver.WallTime()}s");
             }
-
-            return getResults(solver);
+            if (status == CpSolverStatus.Optimal || status == CpSolverStatus.Feasible)
+                return getResults(solver);
+            else return null;
         }
         /*
         ################################
@@ -518,9 +525,11 @@ namespace ATTAS_CORE
         public LinearExpr createPow2(LinearExpr actualValue,int targetValue)
         {
             IntVar obj = model.NewIntVar(0, Int32.MaxValue, "");
-            List<LinearExpr> linearExprs= new List<LinearExpr>();
-            linearExprs.Add(actualValue - targetValue);
-            linearExprs.Add(actualValue - targetValue);
+            List<LinearExpr> linearExprs = new List<LinearExpr>
+            {
+                actualValue - targetValue,
+                actualValue - targetValue
+            };
             model.AddMultiplicationEquality(obj, linearExprs);
             return obj;
         }
