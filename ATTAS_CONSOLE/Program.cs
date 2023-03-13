@@ -8,21 +8,14 @@ using Excel = Microsoft.Office.Interop.Excel;
 */
 ATTAS attas = new ATTAS();
 
-attas.objOption = new int[6] { 0, 0, 0, 0, 0, 0 };
-attas.maxSearchingTimeOption = 120.0;
+attas.objOption = new int[6] { 0, 1, 1, 0, 1, 1 };
+attas.maxSearchingTimeOption = 360.0;
 attas.debugLoggerOption = true;
 attas.solverOption = 1;
 attas.strategyOption = 2;
 
-attas.numSubjects = 14;
-attas.numTasks = 162;
-attas.numSlots = 22;
-attas.numInstructors = 34;
-attas.numBackupInstructors = 5;
-attas.numAreas = 3;
-
-const string inputExcelPath = @"D:\FPT\SEP490_G14\input.xlsx";
-const string outputExcelPath = @"D:\FPT\SEP490_G14\result.xlsx";
+const string inputExcelPath = @"D:\FPT\SEP490_G14\inputSE.xlsx";
+const string outputExcelPath = @"D:\FPT\SEP490_G14\resultSE.xlsx";
 
 try
 {
@@ -39,7 +32,14 @@ try
     oWB = oXL.Workbooks.Open(inputExcelPath);
 
     Console.WriteLine($"ATTAS - Reading Data From Excel {inputExcelPath}");
-  
+
+    attas.numSubjects = oWB.Sheets[4].UsedRange.Columns.Count - 1;
+    attas.numTasks = oWB.Sheets[1].UsedRange.Rows.Count - 1;
+    attas.numSlots = oWB.Sheets[2].UsedRange.Rows.Count - 1;
+    attas.numInstructors = oWB.Sheets[4].UsedRange.Rows.Count - 1;
+    attas.numBackupInstructors = 0;
+    attas.numAreas = oWB.Sheets[8].UsedRange.Rows.Count - 1;
+
     string[] classNames = excelToNameArray((Excel._Worksheet)oWB.Sheets[1], attas.numTasks, true,2,1);
     string[] slotNames = excelToNameArray((Excel._Worksheet)oWB.Sheets[2],attas.numSlots,true , 2,1);
     string[] instructorNames = excelToNameArray((Excel._Worksheet)oWB.Sheets[4], attas.numInstructors, true,2,1);
@@ -58,13 +58,17 @@ try
     attas.areaDistance = excelToArray((Excel._Worksheet)oWB.Sheets[8], 2, 2, attas.numAreas, attas.numAreas);
     attas.areaSlotWeight = excelToArray((Excel._Worksheet)oWB.Sheets[9], 2, 2, attas.numSlots, attas.numSlots);
     // TASK
-    attas.taskSubjectMapping = new int[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5, 6, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13 };
-    attas.taskSlotMapping = new int[] { 9, 11, 16, 19, 16, 6, 12, 14, 1, 3, 9, 11, 17, 19, 4, 6, 12, 14, 1, 3, 9, 11, 17, 19, 4, 6, 12, 14, 1, 3, 9, 11, 17, 19, 4, 6, 12, 14, 1, 3, 9, 17, 11, 4, 19, 12, 6, 1, 14, 0, 3, 17, 11, 4, 19, 6, 12, 14, 1, 3, 9, 11, 19, 17, 4, 8, 6, 16, 5, 14, 13, 3, 2, 7, 15, 3, 14, 3, 17, 11, 4, 19, 12, 6, 1, 14, 9, 15, 16, 1, 14, 15, 10, 10, 5, 11, 4, 19, 12, 6, 0, 14, 9, 3, 17, 3, 9, 8, 2, 14, 15, 15, 17, 2, 5, 10, 13, 18, 0, 7, 8, 7, 8, 19, 16, 13, 13, 0, 7, 8, 10, 16, 2, 5, 10, 13, 18, 0, 18, 0, 7, 8, 5, 5, 13, 6, 9, 11, 17, 3, 4, 11, 12, 19, 1, 19, 1, 6, 9, 4, 4, 12 };
-    attas.taskAreaMapping = new int[] { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 1, 1, 1, 1, 2, 1, 2, 2, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 2, 2, 1, 2, 2, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 2, 1, 2, 2, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2 };
+    attas.taskSubjectMapping = excelToMapping((Excel._Worksheet)oWB.Sheets[1], attas.numTasks, 2, subjectNames);
+    attas.taskSlotMapping = excelToMapping((Excel._Worksheet)oWB.Sheets[1], attas.numTasks, 4, slotNames);
+    attas.taskAreaMapping = new int[attas.numTasks];
+    for(int i = 0;i < attas.numTasks;i++)
+        attas.taskAreaMapping[i] = 1;
+
     
     oWB.Close();
     oXL.Quit();
     Console.WriteLine("Done!");
+
     /*
     ################################
     ||          SOLVING           ||
@@ -145,7 +149,18 @@ catch (Exception ex)
 ||       Excel Utility        ||
 ################################
 */
-    static int[,] excelToArray(Excel._Worksheet oSheet, int startRow, int startCol, int numRows, int numCols)
+static int[] excelToMapping(Excel._Worksheet oSheet,int numRows,int col, string[] namesArray)
+{
+    int[] mapping = new int[numRows];
+    Excel.Range oRng;
+    for (int i = 2; i<=numRows+1; i++)
+    {
+        oRng = oSheet.Cells[i, col];
+        mapping[i - 2]= Array.IndexOf(namesArray, oRng.Value2);
+    }
+    return mapping;
+}
+static int[,] excelToArray(Excel._Worksheet oSheet, int startRow, int startCol, int numRows, int numCols)
 {
     Excel.Range oRng;
     oRng = oSheet.Cells[startRow, startCol].Resize[numRows, numCols];

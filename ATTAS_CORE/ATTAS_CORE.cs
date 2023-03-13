@@ -152,7 +152,7 @@ namespace ATTAS_CORE
                 {
                     assigns.Add((n, i), model.NewBoolVar($"n{n}i{i}"));
                 }
-
+            
             List<ILiteral> literals = new List<ILiteral>();
             //C-00 EACH TASK ASSIGN TO ATLEAST ONE AND ONLY ONE
             foreach (int n in allTasks)
@@ -162,6 +162,7 @@ namespace ATTAS_CORE
                 model.AddExactlyOne(literals);
                 literals.Clear();
             }
+            
             //C-00 CONSTRAINT INSTRUCTOR QUOTA MUST IN RANGE
             List<IntVar> taskAssigned = new List<IntVar>();
             foreach (int i in allInstructorsWithBackup)
@@ -171,16 +172,44 @@ namespace ATTAS_CORE
                 model.AddLinearConstraint(LinearExpr.Sum(taskAssigned), 0, instructorQuota[i]);
                 taskAssigned.Clear();
             }
+
+            List<List<int>> task_in_this_slot = new List<List<int>>();
+            List<List<int>> task_conflict_with_this_slot = new List<List<int>>();
+
+            foreach (int s in allSlots)
+            {
+                List<int> sublist_task_in_this_slot = new List<int>();
+                List<int> sublist_task_conflict_with_this_slot = new List<int>();
+
+                foreach (int n in allTasks)
+                {
+                    if (taskSlotMapping[n] == s)
+                        sublist_task_in_this_slot.Add(n);
+
+                    if (slotConflict[taskSlotMapping[n], s] == 1)
+                        sublist_task_conflict_with_this_slot.Add(n);
+                }
+                task_in_this_slot.Add(sublist_task_in_this_slot);
+                task_conflict_with_this_slot.Add(sublist_task_conflict_with_this_slot);
+            }
             //C-01 NO SLOT CONFLICT
-            List<LinearExpr> taskAssignedPerSlot = new List<LinearExpr>();
+            List<LinearExpr> taskAssignedThatSlot = new List<LinearExpr>();
+            List<LinearExpr> taskAssignedConflictWithThatSlot = new List<LinearExpr>();
             foreach (int i in allInstructors)
                 foreach (int s in allSlots)
                 {
-                    foreach (int n in allTasks)
-                        taskAssignedPerSlot.Add(assigns[(n, i)] * slotConflict[taskSlotMapping[n], s]);
-                    model.Add(LinearExpr.Sum(taskAssignedPerSlot) <= 1);
-                    taskAssignedPerSlot.Clear();
+                    foreach (int n in task_in_this_slot[s])
+                        taskAssignedThatSlot.Add(assigns[(n, i)]);
+                    foreach (int n in task_conflict_with_this_slot[s])
+                        taskAssignedConflictWithThatSlot.Add(assigns[(n, i)]);
+                    ILiteral tmp = model.NewBoolVar("");
+                    model.Add(LinearExpr.Sum(taskAssignedThatSlot) > 0).OnlyEnforceIf(tmp);
+                    model.Add(LinearExpr.Sum(taskAssignedThatSlot) == 0).OnlyEnforceIf(tmp.Not());
+                    model.Add(LinearExpr.Sum(taskAssignedConflictWithThatSlot) == 1).OnlyEnforceIf(tmp);
+                    taskAssignedThatSlot.Clear();
+                    taskAssignedConflictWithThatSlot.Clear();
                 }
+
             //C-02 PREASSIGN MUST BE SATISFY
             foreach (var data in instructorPreassign)
             {
@@ -415,6 +444,7 @@ namespace ATTAS_CORE
                 }
                 
             }
+            
             if (objOption[0] > 0 || objOption[3] > 0)
             {
                 /*
@@ -427,28 +457,36 @@ namespace ATTAS_CORE
                 List<LinearExpr> mul = new List<LinearExpr>();
                 List<LinearExpr> tmp = new List<LinearExpr>();
                 // symmetry breaking 
-                for (int n1 = 0; n1 < numTasks - 1; n1++)
-                    for (int n2 = n1 + 1; n2 < numTasks; n2++)
-                    {
-                        // REDUCE MODEL VARIABLE WASTE
-                        if ((areaSlotWeight[taskSlotMapping[n1], taskSlotMapping[n2]] == 0 || areaDistance[taskAreaMapping[n1], taskAreaMapping[n2]] == 0) && slotCompatibilityCost[taskSlotMapping[n1], taskSlotMapping[n2]] == 0)
-                            continue;
-                        foreach (int i in allInstructors)
+                try
+                {
+                    for (int n1 = 0; n1 < numTasks - 1; n1++)
+                        for (int n2 = n1 + 1; n2 < numTasks; n2++)
                         {
                             // REDUCE MODEL VARIABLE WASTE
-                            if (instructorSlot[i, taskSlotMapping[n1]] == 0 || instructorSlot[i, taskSlotMapping[n2]] == 0 || instructorSubject[i, taskSubjectMapping[n1]] == 0 || instructorSubject[i, taskSubjectMapping[n2]] == 0)
+                            if ((areaSlotWeight[taskSlotMapping[n1], taskSlotMapping[n2]] == 0 || areaDistance[taskAreaMapping[n1], taskAreaMapping[n2]] == 0) && slotCompatibilityCost[taskSlotMapping[n1], taskSlotMapping[n2]] == 0)
                                 continue;
-                            mul.Add(assigns[(n1, i)]);
-                            mul.Add(assigns[(n2, i)]);
-                            LinearExpr product = model.NewBoolVar("");
-                            model.AddMultiplicationEquality(product, mul);
-                            tmp.Add(product);
-                            mul.Clear();
+                            foreach (int i in allInstructors)
+                            {
+                                // REDUCE MODEL VARIABLE WASTE
+                                if (instructorSlot[i, taskSlotMapping[n1]] == 0 || instructorSlot[i, taskSlotMapping[n2]] == 0 || instructorSubject[i, taskSubjectMapping[n1]] == 0 || instructorSubject[i, taskSubjectMapping[n2]] == 0)
+                                    continue;
+                                mul.Add(assigns[(n1, i)]);
+                                mul.Add(assigns[(n2, i)]);
+                                LinearExpr product = model.NewBoolVar("");
+                                model.AddMultiplicationEquality(product, mul);
+                                tmp.Add(product);
+                                mul.Clear();
+                            }
+                            assignsProduct.Add((n1, n2), LinearExpr.Sum(tmp));
+                            tmp.Clear();
                         }
-                        assignsProduct.Add((n1, n2), LinearExpr.Sum(tmp));
-                        tmp.Clear();
-                    }
-            }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("An exception occurred: " + ex.Message + " on line " + ex.StackTrace);
+                }
+        }
+            
             //O-01 MINIMIZE SLOT COMPATIBILITY COST
             if (objOption[0] > 0)
             {
@@ -459,7 +497,7 @@ namespace ATTAS_CORE
                         totalDeltas.Add(objSlotCompatibilityCost());
                         break;
                     case 2:
-                        totalDeltas.Add(createDelta(numTasks * numTasks * 5, objSlotCompatibilityCost(), 0));
+                        totalDeltas.Add(createDelta(numTasks * numTasks * 5, objSlotCompatibilityCost(), numTasks * numTasks * -5));
                         break;
                     case 3:
                         totalDeltas.Add(createPow2(objSlotCompatibilityCost(), 0));
