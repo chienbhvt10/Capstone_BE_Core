@@ -6,16 +6,17 @@ using Excel = Microsoft.Office.Interop.Excel;
 ||           ATTAS            ||
 ################################
 */
-ATTAS attas = new ATTAS();
+ATTAS_ORTOOLS attas = new ATTAS_ORTOOLS();
 
-attas.objOption = new int[6] { 0, 1, 1, 0, 1, 1 };
-attas.maxSearchingTimeOption = 360.0;
+attas.objOption = new int[6] { 0, 0, 0, 0, 0, 0 };
+attas.objWeight = new int[6] { 1, 1, 1, 1, 1, 1 };
+attas.maxSearchingTimeOption = 60.0;
 attas.debugLoggerOption = true;
-attas.solverOption = 1;
 attas.strategyOption = 2;
+attas.numBackupInstructors = 0;
 
-const string inputExcelPath = @"D:\FPT\SEP490_G14\inputSE.xlsx";
-const string outputExcelPath = @"D:\FPT\SEP490_G14\resultSE.xlsx";
+const string inputExcelPath = @"D:\FPT\SEP490_G14\ATTAS_NSGA2_CDP\inputs\inputCF (PREASSIGN).xlsx";
+const string outputExcelPath = @"D:\FPT\SEP490_G14\rawprocess\result.xlsx";
 
 try
 {
@@ -33,33 +34,44 @@ try
 
     Console.WriteLine($"ATTAS - Reading Data From Excel {inputExcelPath}");
 
-    attas.numSubjects = oWB.Sheets[4].UsedRange.Columns.Count - 1;
-    attas.numTasks = oWB.Sheets[1].UsedRange.Rows.Count - 1;
-    attas.numSlots = oWB.Sheets[2].UsedRange.Rows.Count - 1;
-    attas.numInstructors = oWB.Sheets[4].UsedRange.Rows.Count - 1;
-    attas.numBackupInstructors = 0;
-    attas.numAreas = oWB.Sheets[8].UsedRange.Rows.Count - 1;
+    attas.numTasks = (int)oWB.Sheets[1].Cells[1, 2].Value2;
+    attas.numInstructors = (int)oWB.Sheets[1].Cells[2, 2].Value2;
+    attas.numSlots = (int)oWB.Sheets[1].Cells[3, 2].Value2;
+    attas.numSubjects = (int)oWB.Sheets[1].Cells[4, 2].Value2;
+    attas.numAreas = (int)oWB.Sheets[1].Cells[5, 2].Value2;
 
-    string[] classNames = excelToNameArray((Excel._Worksheet)oWB.Sheets[1], attas.numTasks, true,2,1);
-    string[] slotNames = excelToNameArray((Excel._Worksheet)oWB.Sheets[2],attas.numSlots,true , 2,1);
-    string[] instructorNames = excelToNameArray((Excel._Worksheet)oWB.Sheets[4], attas.numInstructors, true,2,1);
-    string[] subjectNames = excelToNameArray((Excel._Worksheet)oWB.Sheets[4], attas.numSubjects, false ,1, 2);
+    string[] classNames = excelToNameArray((Excel._Worksheet)oWB.Sheets[2], attas.numTasks, true,2,1);
+    string[] slotNames = excelToNameArray((Excel._Worksheet)oWB.Sheets[3],attas.numSlots,true , 2,1);
+    string[] instructorNames = excelToNameArray((Excel._Worksheet)oWB.Sheets[5], attas.numInstructors, true,2,1);
+    string[] subjectNames = excelToNameArray((Excel._Worksheet)oWB.Sheets[5], attas.numSubjects, false ,1, 2);
     // SLOT
-    attas.slotConflict = excelToArray((Excel._Worksheet)oWB.Sheets[2], 2, 2, attas.numSlots, attas.numSlots);
-    attas.slotCompatibilityCost = excelToArray((Excel._Worksheet)oWB.Sheets[3], 2, 2, attas.numSlots, attas.numSlots);
+    attas.slotConflict = excelToArray((Excel._Worksheet)oWB.Sheets[3], 2, 2, attas.numSlots, attas.numSlots);
+    attas.slotCompatibilityCost = excelToArray((Excel._Worksheet)oWB.Sheets[4], 2, 2, attas.numSlots, attas.numSlots);
     // INSTRUCTOR
-    attas.instructorSubjectPreference = excelToArray((Excel._Worksheet)oWB.Sheets[4], 2, 2, attas.numInstructors, attas.numSubjects);
+    attas.instructorSubjectPreference = excelToArray((Excel._Worksheet)oWB.Sheets[5], 2, 2, attas.numInstructors, attas.numSubjects);
     attas.instructorSubject = toBinaryArray(attas.instructorSubjectPreference);
-    attas.instructorSlotPreference = excelToArray((Excel._Worksheet)oWB.Sheets[5], 2, 2, attas.numInstructors, attas.numSlots);
+    attas.instructorSlotPreference = excelToArray((Excel._Worksheet)oWB.Sheets[6], 2, 2, attas.numInstructors, attas.numSlots);
     attas.instructorSlot = toBinaryArray(attas.instructorSlotPreference);
-    attas.instructorQuota = flattenArray(excelToArray((Excel._Worksheet)oWB.Sheets[6], 2, 2, attas.numInstructors, 1));
+    attas.instructorQuota = flattenArray(excelToArray((Excel._Worksheet)oWB.Sheets[7], 2, 2, attas.numInstructors, 1));
+
+    attas.instructorPreassign = new List<(int, int, int)>();
+    for (int i=0; i<attas.numInstructors; i++)
+        for(int j=0; j < attas.numSlots; j++)
+        {
+            var content = oWB.Sheets[8].Cells[i + 2, j + 2].Value2;
+            if (content != null)
+            {
+                attas.instructorPreassign.Add((i, (int)content-1, 1));
+            }
+        }
     //attas.instructorPreassign = new List<(int, int, int)> { (32, 0, 1), (32, 1, 1), (32, 2, 1) };
+
     // AREA
-    attas.areaDistance = excelToArray((Excel._Worksheet)oWB.Sheets[8], 2, 2, attas.numAreas, attas.numAreas);
-    attas.areaSlotWeight = excelToArray((Excel._Worksheet)oWB.Sheets[9], 2, 2, attas.numSlots, attas.numSlots);
+    attas.areaDistance = excelToArray((Excel._Worksheet)oWB.Sheets[9], 2, 2, attas.numAreas, attas.numAreas);
+    attas.areaSlotWeight = excelToArray((Excel._Worksheet)oWB.Sheets[10], 2, 2, attas.numSlots, attas.numSlots);
     // TASK
-    attas.taskSubjectMapping = excelToMapping((Excel._Worksheet)oWB.Sheets[1], attas.numTasks, 2, subjectNames);
-    attas.taskSlotMapping = excelToMapping((Excel._Worksheet)oWB.Sheets[1], attas.numTasks, 4, slotNames);
+    attas.taskSubjectMapping = excelToMapping((Excel._Worksheet)oWB.Sheets[2], attas.numTasks, 2, subjectNames);
+    attas.taskSlotMapping = excelToMapping((Excel._Worksheet)oWB.Sheets[2], attas.numTasks, 4, slotNames);
     attas.taskAreaMapping = new int[attas.numTasks];
     for(int i = 0;i < attas.numTasks;i++)
         attas.taskAreaMapping[i] = 1;

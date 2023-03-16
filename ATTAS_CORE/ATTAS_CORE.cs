@@ -1,64 +1,13 @@
 ﻿using Google.OrTools.Sat;
-using System.Runtime.Serialization.Formatters;
 
 namespace ATTAS_CORE
 {
-    public class SolutionPrinter : CpSolverSolutionCallback
-    {
-        private int solutionCount_;
-        private int[] allTasks_;
-        private int[] allInstructors_;
-        private Dictionary<(int, int), BoolVar> assigns_;
-        private int solutionLimit_;
-        private bool print_;
-        public SolutionPrinter(int[] allInstructorsWithBackup, int[] allTasks,
-                               Dictionary<(int, int), BoolVar> assigns, int limit,bool print)
-        {
-            solutionCount_ = 0;
-            allInstructors_ = allInstructorsWithBackup;
-            allTasks_ = allTasks;
-            assigns_ = assigns;
-            solutionLimit_ = limit;
-            print_= print;
-        }
-
-        public override void OnSolutionCallback()
-        {
-            if (print_)
-            {
-                Console.WriteLine($"Solution #{solutionCount_}:");
-                foreach (int n in allTasks_)
-                {
-                    bool isAssigned = false;
-                    foreach (int i in allInstructors_)
-                    {
-                        if (Value(assigns_[(n, i)]) == 1L)
-                        {
-                            isAssigned = true;
-                            Console.WriteLine($" Task {n} assigned to instructor {i}");
-                        }
-                    }
-                    if (!isAssigned)
-                    {
-                        Console.WriteLine($" Task {n} need backup instructor!");
-                    }
-
-                }
-            }
-            solutionCount_++;
-            if (solutionCount_ >= solutionLimit_)
-            {
-                Console.WriteLine($"Stop search after {solutionLimit_} solutions");
-                StopSearch();
-            }
-        }
-
-        public int SolutionCount()
-        {
-            return solutionCount_;
-        }
-    }
-    public class ATTAS
+    /*
+    ################################
+    ||       START OR-TOOLS       ||
+    ################################
+    */
+    public class ATTAS_ORTOOLS
     {
         /*
         ################################
@@ -66,7 +15,6 @@ namespace ATTAS_CORE
         ################################
         */
         public double maxSearchingTimeOption { get; set; } = 30.0;
-        public int solverOption { get; set; } = 1;
         public int strategyOption { get; set; } = 2;
         public int[] objOption { get; set; } = new int[6] { 1, 1, 1, 1, 1, 1 };
         public int[] objWeight { get; set; } = new int[6] { 1, 1, 1, 1, 1, 1 };
@@ -105,13 +53,7 @@ namespace ATTAS_CORE
         public int[] taskSlotMapping { get; set; } = Array.Empty<int>();
         public int[] taskAreaMapping { get; set; } = Array.Empty<int>();
         public int[,] areaDistance { get; set; } = new int[0, 0];
-        public int[,] areaSlotWeight { get; set; } = new int[0, 0];
-
-        /*
-        ################################
-        ||       START OR-TOOLS       ||
-        ################################
-        */
+        public int[,] areaSlotWeight { get; set; } = new int[0, 0];  
 
         /*
         ################################
@@ -370,9 +312,11 @@ namespace ATTAS_CORE
                         totalDeltas.Add(objQuotaReached());
                         break;
                     case 2:
+                        weights.Add(objWeight[2]);
                         totalDeltas.Add(createDelta(numTasks, objQuotaReached(), 0));
                         break;
                     case 3:
+                        weights.Add(objWeight[2]);
                         totalDeltas.Add(createPow2(objQuotaReached(), 0));
                         break;
                 }
@@ -387,9 +331,11 @@ namespace ATTAS_CORE
                         totalDeltas.Add(objSubjectPreference());
                         break;
                     case 2:
+                        weights.Add(objWeight[4]);
                         totalDeltas.Add(createDelta(numTasks * 5, objSubjectPreference(), numTasks * 5));
                         break;
                     case 3:
+                        weights.Add(objWeight[4]);
                         totalDeltas.Add(createPow2(objSubjectPreference(),numTasks*5));
                         break;
                 }
@@ -405,9 +351,11 @@ namespace ATTAS_CORE
                         totalDeltas.Add(objSlotPreference());
                         break;
                     case 2:
+                        weights.Add(objWeight[5]);
                         totalDeltas.Add(createDelta(numTasks * 5, objSlotPreference(), numTasks * 5));
                         break;
                     case 3:
+                        weights.Add(objWeight[5]);
                         totalDeltas.Add(createPow2(objSlotPreference(),numTasks*5));
                         break;
                 }
@@ -436,9 +384,11 @@ namespace ATTAS_CORE
                         totalDeltas.Add(objSubjectDiversity());
                         break;
                     case 2:
+                        weights.Add(objWeight[1]);
                         totalDeltas.Add(createDelta(numSubjects, objSubjectDiversity(), 0));
                         break;
                     case 3:
+                        weights.Add(objWeight[1]);
                         totalDeltas.Add(createPow2(objSubjectDiversity(), 0));
                         break;
                 }
@@ -497,9 +447,11 @@ namespace ATTAS_CORE
                         totalDeltas.Add(objSlotCompatibilityCost());
                         break;
                     case 2:
+                        weights.Add(objWeight[0]);
                         totalDeltas.Add(createDelta(numTasks * numTasks * 5, objSlotCompatibilityCost(), numTasks * numTasks * -5));
                         break;
                     case 3:
+                        weights.Add(objWeight[0]);
                         totalDeltas.Add(createPow2(objSlotCompatibilityCost(), 0));
                         break;
                 }
@@ -515,9 +467,11 @@ namespace ATTAS_CORE
                         totalDeltas.Add(objWalkingDistance());
                         break;
                     case 2:
+                        weights.Add(objWeight[3]);
                         totalDeltas.Add(createDelta(numTasks * numTasks * 5 * 5, objWalkingDistance(), 0));
                         break;
                     case 3:
+                        weights.Add(objWeight[3]);
                         totalDeltas.Add(createPow2(objWalkingDistance(), 0));
                         break;
                 }
@@ -525,13 +479,13 @@ namespace ATTAS_CORE
             switch (strategyOption)
             {
                 case 1:
-                    model.Minimize(LinearExpr.WeightedSum(totalDeltas,weights));
+                    model.Minimize(LinearExpr.WeightedSum(totalDeltas, weights));
                     break;
                 case 2:
-                    model.Minimize(LinearExpr.Sum(totalDeltas));
+                    model.Minimize(LinearExpr.WeightedSum(totalDeltas, weights));
                     break;
                 case 3:
-                    model.Minimize(LinearExpr.Sum(totalDeltas));
+                    model.Minimize(LinearExpr.WeightedSum(totalDeltas, weights));
                     break;
             }
             status = solver.Solve(model);
@@ -592,43 +546,36 @@ namespace ATTAS_CORE
             }
             return results;
         }
-        public List<(int, int)>? ortools()
+        public List<(int, int)>? solve()
         {
             if (objOption.Sum() == 0)
                 return constraintOnly();
             else
                 return objectiveOptimize();
         }
-        /*
-        ################################
-        ||        END OR-TOOLS        ||
-        ################################
-         */
-
-        /*
-        ################################
-        ||          MAIN HUB          ||
-        ################################
-        */
-        public List<(int, int)>? solve()
-        {
-            /*  Solver
-             *  1: OR-TOOLS  ( 1,2,3 )
-             *  2: CPLEX ( 1 , 2 , 3 )
-             *  3: NGSA-II ( 4 )
-             *  Strategy
-             *  1: Scalazation
-             *  2: Constraint Programming
-             *  3: Compromise Programming
-             *  4: Pareto-based
-             */
-            switch (solverOption)
-            {
-                case 1:
-                    return ortools();
-            }
-            return null;
-            
-        }
+    }
+    /*
+    ################################
+    ||        END OR-TOOLS        ||
+    ################################
+    */
+    public class ATTAS_CPLEX
+    {
+        
+    }
+    
+    public class ATTAS_NSGA2 
+    {
+        
     }
 }
+/*  Solver
+    *  1: OR-TOOLS  ( 1,2,3 )
+    *  2: CPLEX ( 1 , 2 , 3 )
+    *  3: NGSA-II ( 4 )
+    *  Strategy
+    *  1: Scalazation
+    *  2: Constraint Programming
+    *  3: Compromise Programming
+    *  4: Pareto-based
+*/
