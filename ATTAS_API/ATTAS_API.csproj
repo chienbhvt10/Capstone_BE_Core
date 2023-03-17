@@ -10,8 +10,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Google.OrTools" Version="9.6.2534" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.17.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.2.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="ATTAS_CORE">
+      <HintPath>..\ATTAS_CORE\bin\Debug\net6.0\ATTAS_CORE.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>

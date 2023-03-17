@@ -1,5 +1,4 @@
 ﻿using Google.OrTools.Sat;
-
 namespace ATTAS_CORE
 {
     /*
@@ -431,7 +430,7 @@ namespace ATTAS_CORE
                             tmp.Clear();
                         }
                 }
-                catch (Exception ex)
+                catch (System.Exception ex)
                 {
                     Console.WriteLine("An exception occurred: " + ex.Message + " on line " + ex.StackTrace);
                 }
@@ -559,10 +558,6 @@ namespace ATTAS_CORE
     ||        END OR-TOOLS        ||
     ################################
     */
-    public class ATTAS_CPLEX
-    {
-        
-    }
     
     public class ATTAS_NSGA2 
     {
