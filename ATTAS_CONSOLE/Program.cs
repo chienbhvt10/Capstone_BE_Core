@@ -8,14 +8,14 @@ using Excel = Microsoft.Office.Interop.Excel;
 */
 ATTAS_ORTOOLS attas = new ATTAS_ORTOOLS();
 
-attas.objOption = new int[6] { 0, 0, 0, 0, 0, 0 };
+attas.objOption = new int[6] { 0, 1, 1, 0, 1, 1 };
 attas.objWeight = new int[6] { 1, 1, 1, 1, 1, 1 };
-attas.maxSearchingTimeOption = 60.0;
+attas.maxSearchingTimeOption = 30.0;
 attas.debugLoggerOption = true;
 attas.strategyOption = 2;
 attas.numBackupInstructors = 0;
 
-const string inputExcelPath = @"D:\FPT\SEP490_G14\ATTAS_NSGA2_CDP\inputs\inputCF (PREASSIGN).xlsx";
+const string inputExcelPath = @"D:\FPT\SEP490_G14\ATTAS_NSGA2_CDP\inputs\inputSE.xlsx";
 const string outputExcelPath = @"D:\FPT\SEP490_G14\rawprocess\result.xlsx";
 
 try

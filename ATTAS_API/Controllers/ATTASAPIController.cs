@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 using ATTAS_CORE;
 using Google.Protobuf.WellKnownTypes;
+using Google.OrTools.Sat;
+using System;
 
 namespace ATTAS_API.Controllers
 {
@@ -38,8 +40,19 @@ namespace ATTAS_API.Controllers
         {
             Data _data = (Data)data;
             ATTAS_ORTOOLS attas = new ATTAS_ORTOOLS();
+            //SETTING
+            attas.maxSearchingTimeOption = _data.Setting.maxSearchingTime;
+            attas.strategyOption = _data.Setting.strategy;
+            attas.objOption = _data.Setting.objectiveOption.ToArray();
+            attas.objWeight = _data.Setting.objectiveWeight.ToArray();
+            attas.debugLoggerOption = true;
+            //INPUT
+            if (attas.debugLoggerOption)
+            {
+                Console.WriteLine("DEBUG: Reading Data");
+            }
             attas.numTasks = _data.numTasks;
-            attas.numInstructors = _data.numInstructor;
+            attas.numInstructors = _data.numInstructors;
             attas.numSlots = _data.numSlots;
             attas.numSubjects = _data.numSubjects;
             attas.numAreas = _data.numAreas;
@@ -51,32 +64,42 @@ namespace ATTAS_API.Controllers
             attas.instructorSlot = toBinaryArray(attas.instructorSlotPreference);
             attas.instructorQuota = _data.instructorQuota.ToArray();
             attas.instructorPreassign = new List<(int, int, int)>();
-            foreach(Preassign item in _data.preassigns)
+            if (_data.preassigns != null)
             {
-                attas.instructorPreassign.Add((item.instructorOrder, item.taskOrder, 1));
+                foreach (Preassign item in _data.preassigns)
+                {
+                    attas.instructorPreassign.Add((item.instructorOrder, item.taskOrder, 1));
+                }
             }
             attas.areaDistance = listToArray(_data.areaDistance);
             attas.areaSlotWeight = listToArray(_data.areaSlotCoefficient);
             attas.taskSubjectMapping = new int[attas.numTasks];
             attas.taskSlotMapping = new int[attas.numTasks];
             attas.taskAreaMapping = new int[attas.numTasks];
-            int i = -1;
             foreach(Models.Task item in _data.tasks)
             {
-                i++;
-                attas.taskSubjectMapping[i] = item.subjectOrder;
-                attas.taskSlotMapping[i] = item.slotOrder;
-                attas.taskAreaMapping[i] = item.areaOrder;
+                attas.taskSubjectMapping[item.Order] = item.subjectOrder;
+                attas.taskSlotMapping[item.Order] = item.slotOrder;
+                attas.taskAreaMapping[item.Order] = item.areaOrder;
             }
-            Console.WriteLine("ATTAS - Start Solving");
-            List<(int, int)>? results = attas.solve();
-            if (results != null)
+            if (attas.debugLoggerOption)
             {
-                foreach(var item in results)
-                {
-                    Console.WriteLine($"{item.Item1}-{item.Item2}");
-                }
+                Console.WriteLine("DEBUG: Start Solving");
             }
+            List<(int, int)>? results = attas.solve();
+            if (results!= null)
+            {
+                if (attas.debugLoggerOption)
+                {
+                    List<int> tmp = new List<int>();
+                    foreach (var item in results)
+                    {
+                        tmp.Add(item.Item2);
+                    }
+                    string formattedResults = "[" + string.Join(",", tmp) + "]";
+                    Console.WriteLine(formattedResults);
+                }
+            } 
         }
 
         static int[,] listToArray(List<List<int>> list)
@@ -111,6 +134,21 @@ namespace ATTAS_API.Controllers
                         result[i, j] = 0;
                     }
             return result;
+        }
+        static void printArray(int[,] myArray)
+        {
+            int rows = myArray.GetLength(0);
+            int columns = myArray.GetLength(1);
+
+            // Loop through each row and column, printing out the value at each position
+            for (int i = 0; i < rows; i++)
+            {
+                for (int j = 0; j < columns; j++)
+                {
+                    Console.Write(myArray[i, j] + " ");
+                }
+                Console.WriteLine();
+            }
         }
     }
 }

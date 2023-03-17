@@ -7,7 +7,7 @@
         public List<Slot> slots { get; set; }
         public List<Instructor> instructors { get; set; }
         public int numTasks { get; set; }
-        public int numInstructor { get; set; }
+        public int numInstructors { get; set; }
         public int numSlots { get; set; }
         public int numSubjects { get; set; }
         public int numAreas { get; set; }
@@ -19,7 +19,7 @@
         public List<int> instructorQuota { get; set; }
         public List<List<int>> areaDistance { get; set; }
         public List<List<int>> areaSlotCoefficient { get; set; }
-        public List<Preassign> preassigns { get; set; } 
+        public List<Preassign>? preassigns { get; set; } 
 
     }
 }
