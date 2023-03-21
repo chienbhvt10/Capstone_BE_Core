@@ -1,4 +1,6 @@
 ﻿using Google.OrTools.Sat;
+using System.Collections.Generic;
+
 namespace ATTAS_CORE
 {
     /*
@@ -15,7 +17,7 @@ namespace ATTAS_CORE
         */
         public double maxSearchingTimeOption { get; set; } = 30.0;
         public int strategyOption { get; set; } = 2;
-        public int[] objOption { get; set; } = new int[6] { 1, 1, 1, 1, 1, 1 };
+        public int[] objOption { get; set; } = new int[6] { 0, 1, 1, 0, 1, 1 };
         public int[] objWeight { get; set; } = new int[6] { 1, 1, 1, 1, 1, 1 };
         public bool debugLoggerOption { get; set; } = false;
 
@@ -169,7 +171,7 @@ namespace ATTAS_CORE
                 foreach (int i in allInstructors)
                     model.Add(instructorSlot[i, taskSlotMapping[n]] - assigns[(n, i)] > -1);
         }
-        public List<(int, int)> constraintOnly()
+        public List<List<(int, int)>> constraintOnly()
         {
             setSolverCount();
             createModel();
@@ -291,7 +293,7 @@ namespace ATTAS_CORE
             }
             return LinearExpr.WeightedSum(assignedTasks, assignedTaskSlotPreferences);
         }
-        public List<(int, int)>? objectiveOptimize()
+        public List<List<(int, int)>>? objectiveOptimize()
         {
             setSolverCount();
             createModel();
@@ -447,11 +449,11 @@ namespace ATTAS_CORE
                         break;
                     case 2:
                         weights.Add(objWeight[0]);
-                        totalDeltas.Add(createDelta(numTasks * numTasks * 5, objSlotCompatibilityCost(), numTasks * numTasks * -5));
+                        totalDeltas.Add(createDelta( numSlots * (numSlots-1) * 5 * 2, objSlotCompatibilityCost(), numSlots * (numSlots - 1) * 5) );
                         break;
                     case 3:
                         weights.Add(objWeight[0]);
-                        totalDeltas.Add(createPow2(objSlotCompatibilityCost(), 0));
+                        totalDeltas.Add(createPow2(objSlotCompatibilityCost(), numSlots * (numSlots - 1) * 5) );
                         break;
                 }
                 
@@ -467,7 +469,7 @@ namespace ATTAS_CORE
                         break;
                     case 2:
                         weights.Add(objWeight[3]);
-                        totalDeltas.Add(createDelta(numTasks * numTasks * 5 * 5, objWalkingDistance(), 0));
+                        totalDeltas.Add(createDelta(Int32.MaxValue, objWalkingDistance(), 0));
                         break;
                     case 3:
                         weights.Add(objWeight[3]);
@@ -524,7 +526,7 @@ namespace ATTAS_CORE
             model.AddMultiplicationEquality(obj, linearExprs);
             return obj;
         }
-        public List<(int,int)> getResults(CpSolver solver)
+        public List<List<(int, int)>> getResults(CpSolver solver)
         {
             List<(int,int)> results = new List<(int,int)> ();
             foreach (int n in allTasks)
@@ -543,9 +545,13 @@ namespace ATTAS_CORE
                     results.Add((n, -1));
                 }
             }
-            return results;
+            List<List<(int, int)>> tmp = new List<List<(int, int)>>
+            {
+                results
+            };
+            return tmp;
         }
-        public List<(int, int)>? solve()
+        public List<List<(int, int)>>? solve()
         {
             if (objOption.Sum() == 0)
                 return constraintOnly();

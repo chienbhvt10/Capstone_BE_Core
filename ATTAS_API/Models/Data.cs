@@ -2,6 +2,8 @@
 {
     public class Data
     {
+        public string token { get; set; }
+        public string? sessionHash { get; set; }
         public Setting Setting { get; set; }
         public List<Task> tasks { get; set; }
         public List<Slot> slots { get; set; }

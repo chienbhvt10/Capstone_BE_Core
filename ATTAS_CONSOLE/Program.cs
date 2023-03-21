@@ -10,12 +10,12 @@ ATTAS_ORTOOLS attas = new ATTAS_ORTOOLS();
 
 attas.objOption = new int[6] { 0, 1, 1, 0, 1, 1 };
 attas.objWeight = new int[6] { 1, 1, 1, 1, 1, 1 };
-attas.maxSearchingTimeOption = 30.0;
+attas.maxSearchingTimeOption = 600.0;
 attas.debugLoggerOption = true;
 attas.strategyOption = 2;
-attas.numBackupInstructors = 0;
 
-const string inputExcelPath = @"D:\FPT\SEP490_G14\ATTAS_NSGA2_CDP\inputs\inputSE.xlsx";
+
+const string inputExcelPath = @"D:\FPT\SEP490_G14\ATTAS_NSGA2_CDP\inputs\inputCF_SU23.xlsx";
 const string outputExcelPath = @"D:\FPT\SEP490_G14\rawprocess\result.xlsx";
 
 try
@@ -39,6 +39,7 @@ try
     attas.numSlots = (int)oWB.Sheets[1].Cells[3, 2].Value2;
     attas.numSubjects = (int)oWB.Sheets[1].Cells[4, 2].Value2;
     attas.numAreas = (int)oWB.Sheets[1].Cells[5, 2].Value2;
+    attas.numBackupInstructors = (int)oWB.Sheets[1].Cells[6, 2].Value2; ;
 
     string[] classNames = excelToNameArray((Excel._Worksheet)oWB.Sheets[2], attas.numTasks, true,2,1);
     string[] slotNames = excelToNameArray((Excel._Worksheet)oWB.Sheets[3],attas.numSlots,true , 2,1);
@@ -87,7 +88,7 @@ try
     ################################
     */
     Console.WriteLine("ATTAS - Start Solving");
-    List<(int, int)>? results = attas.solve();
+    List<List<(int, int)>>? results = attas.solve();
     /*
     ################################
     ||       EXPORT RESULT        ||
@@ -127,8 +128,8 @@ try
             {
                 fullBorder(oWS.Cells[i + 1, j + 1]);
             }
-
-        foreach ((int, int) result in results)
+        List<(int, int)> tmp = results[0];
+        foreach ((int, int) result in tmp)
             if (result.Item2 >= 0)
             {
                 oWS.Cells[result.Item2 + 2, attas.taskSlotMapping[result.Item1] + 2] = $"{result.Item1 + 1}.{classNames[result.Item1]}.{subjectNames[attas.taskSubjectMapping[result.Item1]]}";
