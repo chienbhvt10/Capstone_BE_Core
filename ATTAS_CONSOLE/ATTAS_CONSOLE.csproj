@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <PackageReference Include="Google.OrTools" Version="9.5.2237" />
+    <PackageReference Include="Spectre.Console" Version="0.46.0" />
   </ItemGroup>
 
   <ItemGroup>

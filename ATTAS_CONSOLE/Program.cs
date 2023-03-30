@@ -1,171 +1,269 @@
 ﻿using ATTAS_CORE;
-using Excel = Microsoft.Office.Interop.Excel;
+using Spectre.Console;
+using System.Runtime.InteropServices;
+using Microsoft.Office.Interop.Excel;
+using Range = Microsoft.Office.Interop.Excel.Range;
 
-/*
-################################
-||           ATTAS            ||
-################################
-*/
+const string inputExcelFilePath = @"D:\FPT\SEP490_G14\ATTAS_ORTOOLS\inputs\inputCF_SU23_NEW.xlsx";
+const string outputExcelFolderPath = @"D:\FPT\SEP490_G14\ATTAS_ORTOOLS\results";
+
 ATTAS_ORTOOLS attas = new ATTAS_ORTOOLS();
 
-attas.objOption = new int[6] { 0, 1, 1, 0, 1, 1 };
-attas.objWeight = new int[6] { 1, 1, 1, 1, 1, 1 };
-attas.maxSearchingTimeOption = 600.0;
-attas.debugLoggerOption = true;
+attas.objOption = new int[8] { 0, 0, 0, 0, 0, 0, 0, 0 };
+attas.objWeight = new int[8] { 50, 25, 1, 1, 1, 1, 1, 1 };
+attas.maxSearchingTimeOption = 300.0;
 attas.strategyOption = 2;
 
+string[] classNames = Array.Empty<string>();
+string[] slotNames = Array.Empty<string>();
+string[] instructorNames = Array.Empty<string>();
+string[] subjectNames = Array.Empty<string>();
 
-const string inputExcelPath = @"D:\FPT\SEP490_G14\ATTAS_NSGA2_CDP\inputs\inputCF_SU23.xlsx";
-const string outputExcelPath = @"D:\FPT\SEP490_G14\rawprocess\result.xlsx";
-
-try
+AnsiConsole.Write(new FigletText("ATTAS").LeftJustified().Color(Color.Gold1));
+string choice;
+bool read = false;
+List<List<(int, int)>>? results = null;
+do
 {
-    /*
-    ################################
-    ||       READING EXCEL        ||
-    ################################
-    */
-    Excel.Application oXL;
-    Excel._Workbook oWB;
-    Excel._Worksheet oWS;
-    //Start Excel and get Application object.
-    oXL = new Excel.Application();
-    oWB = oXL.Workbooks.Open(inputExcelPath);
-
-    Console.WriteLine($"ATTAS - Reading Data From Excel {inputExcelPath}");
-
-    attas.numTasks = (int)oWB.Sheets[1].Cells[1, 2].Value2;
-    attas.numInstructors = (int)oWB.Sheets[1].Cells[2, 2].Value2;
-    attas.numSlots = (int)oWB.Sheets[1].Cells[3, 2].Value2;
-    attas.numSubjects = (int)oWB.Sheets[1].Cells[4, 2].Value2;
-    attas.numAreas = (int)oWB.Sheets[1].Cells[5, 2].Value2;
-    attas.numBackupInstructors = (int)oWB.Sheets[1].Cells[6, 2].Value2; ;
-
-    string[] classNames = excelToNameArray((Excel._Worksheet)oWB.Sheets[2], attas.numTasks, true,2,1);
-    string[] slotNames = excelToNameArray((Excel._Worksheet)oWB.Sheets[3],attas.numSlots,true , 2,1);
-    string[] instructorNames = excelToNameArray((Excel._Worksheet)oWB.Sheets[5], attas.numInstructors, true,2,1);
-    string[] subjectNames = excelToNameArray((Excel._Worksheet)oWB.Sheets[5], attas.numSubjects, false ,1, 2);
-    // SLOT
-    attas.slotConflict = excelToArray((Excel._Worksheet)oWB.Sheets[3], 2, 2, attas.numSlots, attas.numSlots);
-    attas.slotCompatibilityCost = excelToArray((Excel._Worksheet)oWB.Sheets[4], 2, 2, attas.numSlots, attas.numSlots);
-    // INSTRUCTOR
-    attas.instructorSubjectPreference = excelToArray((Excel._Worksheet)oWB.Sheets[5], 2, 2, attas.numInstructors, attas.numSubjects);
-    attas.instructorSubject = toBinaryArray(attas.instructorSubjectPreference);
-    attas.instructorSlotPreference = excelToArray((Excel._Worksheet)oWB.Sheets[6], 2, 2, attas.numInstructors, attas.numSlots);
-    attas.instructorSlot = toBinaryArray(attas.instructorSlotPreference);
-    attas.instructorQuota = flattenArray(excelToArray((Excel._Worksheet)oWB.Sheets[7], 2, 2, attas.numInstructors, 1));
-
-    attas.instructorPreassign = new List<(int, int, int)>();
-    for (int i=0; i<attas.numInstructors; i++)
-        for(int j=0; j < attas.numSlots; j++)
-        {
-            var content = oWB.Sheets[8].Cells[i + 2, j + 2].Value2;
-            if (content != null)
-            {
-                attas.instructorPreassign.Add((i, (int)content-1, 1));
-            }
-        }
-    //attas.instructorPreassign = new List<(int, int, int)> { (32, 0, 1), (32, 1, 1), (32, 2, 1) };
-
-    // AREA
-    attas.areaDistance = excelToArray((Excel._Worksheet)oWB.Sheets[9], 2, 2, attas.numAreas, attas.numAreas);
-    attas.areaSlotWeight = excelToArray((Excel._Worksheet)oWB.Sheets[10], 2, 2, attas.numSlots, attas.numSlots);
-    // TASK
-    attas.taskSubjectMapping = excelToMapping((Excel._Worksheet)oWB.Sheets[2], attas.numTasks, 2, subjectNames);
-    attas.taskSlotMapping = excelToMapping((Excel._Worksheet)oWB.Sheets[2], attas.numTasks, 4, slotNames);
-    attas.taskAreaMapping = new int[attas.numTasks];
-    for(int i = 0;i < attas.numTasks;i++)
-        attas.taskAreaMapping[i] = 1;
-
-    
-    oWB.Close();
-    oXL.Quit();
-    Console.WriteLine("Done!");
-
-    /*
-    ################################
-    ||          SOLVING           ||
-    ################################
-    */
-    Console.WriteLine("ATTAS - Start Solving");
-    List<List<(int, int)>>? results = attas.solve();
-    /*
-    ################################
-    ||       EXPORT RESULT        ||
-    ################################
-    */
-    if (results != null)
+    // Ask for the user's favorite fruit
+    choice = AnsiConsole.Prompt(
+        new SelectionPrompt<string>()
+            .Title("")
+            .PageSize(10)
+            .MoreChoicesText("[grey](Move up and down to select option)[/]")
+            .AddChoices(new[] {
+            "Input", "Solve", "Output","Setting", "Quit"
+            }));
+    switch(choice)
     {
-        Console.WriteLine($"ATTAS - Start Export Result To Excel {outputExcelPath}");
-        oXL = new Excel.Application();
-        oWB = oXL.Workbooks.Open(outputExcelPath);
-        oWS = oWB.Sheets.Add();
-
-        DateTime currentTime = DateTime.Now;
-        string currentTimeString = currentTime.ToString("yyyy-MM-dd_HH-mm-ss");
-        oWS.Name = $"result_{currentTimeString}";
-
-        for (int i = 0; i < attas.numInstructors; i++)
-        {
-            oWS.Cells[i + 2, 1] = instructorNames[i];
-            oWS.Cells[i + 2, 1].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.DarkOrange);
-            alignMiddle(oWS.Cells[i + 2, 1]);
-        }
-
-        oWS.Cells[attas.numInstructors + 2, 1] = "UNASSIGNED";
-        oWS.Cells[attas.numInstructors + 2, 1].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.DarkOrange);
-        alignMiddle(oWS.Cells[attas.numInstructors + 2, 1]);
-
-        for (int i = 0;i < attas.numSlots; i++)
-        {
-            oWS.Cells[1,i+2] = slotNames[i];
-            oWS.Cells[1,i+2].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.SteelBlue);
-            alignMiddle(oWS.Cells[1, i + 2]);
-        }
-
-        for (int i = 0; i <= attas.numInstructors + 1; i++)
-            for (int j = 0; j <= attas.numSlots; j++)
+        case "Input":
+            read = readInputExcel(inputExcelFilePath, attas, ref classNames, ref slotNames, ref instructorNames, ref subjectNames);
+            cleanCOM();
+            break;
+        case "Solve":
+            var rule = new Rule("Solve");
+            rule.LeftJustified();
+            AnsiConsole.Write(rule);
+            if (read)
             {
-                fullBorder(oWS.Cells[i + 1, j + 1]);
-            }
-        List<(int, int)> tmp = results[0];
-        foreach ((int, int) result in tmp)
-            if (result.Item2 >= 0)
-            {
-                oWS.Cells[result.Item2 + 2, attas.taskSlotMapping[result.Item1] + 2] = $"{result.Item1 + 1}.{classNames[result.Item1]}.{subjectNames[attas.taskSubjectMapping[result.Item1]]}";
-                //Console.WriteLine($"Tasks {result.Item1} assigned to instructor {result.Item2}");
+                results = solve(attas);
             }
             else
             {
-                oWS.Cells[attas.numInstructors + 2, attas.taskSlotMapping[result.Item1] + 2] = oWS.Cells[attas.numInstructors + 2, attas.taskSlotMapping[result.Item1] + 2].Value + $"{result.Item1 + 1}.{classNames[result.Item1]}.{subjectNames[attas.taskSubjectMapping[result.Item1]]}\n";
-                //Console.WriteLine($"Tasks {result.Item1} need backup instructor!");
+                AnsiConsole.Markup("\n[red]No input to solve[/]\n\n");
             }
+            break;
+        case "Output":
+            writeOutputExcel(outputExcelFolderPath, attas, results,ref classNames,ref slotNames,ref instructorNames,ref subjectNames);
+            cleanCOM();
+            break;
+    }
+}
+while (choice != "Quit");
 
-        oWS.Columns.AutoFit();
-        oWB.Save();
+static bool readInputExcel(string inputPath,ATTAS_ORTOOLS attas,ref string[] classNames,ref string[] slotNames,ref string[] instructorNames,ref string[] subjectNames)
+{
+    Application? oXL = null;
+    Workbook? oWB = null;
+    try
+    {
+        var rule = new Rule("Input");
+        rule.LeftJustified();
+        AnsiConsole.Write(rule);
+        AnsiConsole.Markup($"\n Reading Data From [underline green]{inputPath}[/]\n\n");
+        oXL = new Application();
+        oWB = oXL.Workbooks.Open(inputExcelFilePath);
+        Worksheet oWS_inputInfo = oWB.Sheets[1];
+        Worksheet oWS_tasks = oWB.Sheets[2];
+        Worksheet oWS_slotConflict = oWB.Sheets[3];
+        Worksheet oWS_slotDay = oWB.Sheets[4];
+        Worksheet oWS_slotTime = oWB.Sheets[5];
+        Worksheet oWS_slotSegment = oWB.Sheets[6];
+        Worksheet oWS_patternCost = oWB.Sheets[7];
+        Worksheet oWS_instructorSubject = oWB.Sheets[8];
+        Worksheet oWS_instructorSlot = oWB.Sheets[9];
+        Worksheet oWS_instructorQuota = oWB.Sheets[10];
+        Worksheet oWS_instructorPreassign = oWB.Sheets[11];
+        Worksheet oWS_areaDistance = oWB.Sheets[12];
+        Worksheet oWS_areaSlotCoefficient = oWB.Sheets[13];
+        attas.numTasks = (int)oWS_inputInfo.Cells[1, 2].Value2;
+        attas.numInstructors = (int)oWS_inputInfo.Cells[2, 2].Value2;
+        attas.numSlots = (int)oWS_inputInfo.Cells[3, 2].Value2;
+        attas.numDays = (int)oWS_inputInfo.Cells[4, 2].Value2;
+        attas.numTimes = (int)oWS_inputInfo.Cells[5, 2].Value2;
+        attas.numSegments = (int)oWS_inputInfo.Cells[6, 2].Value2;
+        int numSlotSegmentRules = (int)oWS_inputInfo.Cells[7, 2].Value2;
+        attas.numSubjects = (int)oWS_inputInfo.Cells[8, 2].Value2;
+        attas.numAreas = (int)oWS_inputInfo.Cells[9, 2].Value2;
+        attas.numBackupInstructors = (int)oWS_inputInfo.Cells[10, 2].Value2;
+        // NAME
+        classNames = excelToNameArray(oWS_tasks, attas.numTasks, true, 2, 1);
+        slotNames = excelToNameArray(oWS_slotConflict, attas.numSlots, true, 2, 1);
+        instructorNames = excelToNameArray(oWS_instructorSubject, attas.numInstructors, true, 2, 1);
+        subjectNames = excelToNameArray(oWS_instructorSubject, attas.numSubjects, false, 1, 2);
+        // SLOT
+        attas.slotConflict = excelToArray(oWS_slotConflict, 2, 2, attas.numSlots, attas.numSlots);
+        attas.slotDay = excelToArray(oWS_slotDay, 2, 2, attas.numSlots, attas.numDays);
+        attas.slotTime = excelToArray(oWS_slotTime, 2, 2, attas.numSlots, attas.numTimes);
+        attas.slotSegment = new int[attas.numSlots, attas.numDays, attas.numSegments];
+        for (int i = 0; i < numSlotSegmentRules; i++)
+        {
+            int slot = Array.IndexOf(slotNames, (string)oWS_slotSegment.Cells[i + 2, 1].Value2);
+            int day = (int)(double)oWS_slotSegment.Cells[i + 2, 2].Value2 - 1;
+            int segment = (int)(double)oWS_slotSegment.Cells[i + 2, 3].Value2 - 1;
+            attas.slotSegment[slot, day, segment] = 1;
+        }
+        attas.patternCost = flattenArray(excelToArray(oWS_patternCost, 2, 2, (1 << attas.numSegments), 1));
+        // INSTRUCTOR
+        attas.instructorSubjectPreference = excelToArray(oWS_instructorSubject, 2, 2, attas.numInstructors, attas.numSubjects);
+        attas.instructorSubject = toBinaryArray(attas.instructorSubjectPreference);
+        attas.instructorSlotPreference = excelToArray(oWS_instructorSlot, 2, 2, attas.numInstructors, attas.numSlots);
+        attas.instructorSlot = toBinaryArray(attas.instructorSlotPreference);
+        attas.instructorQuota = flattenArray(excelToArray(oWS_instructorQuota, 2, 3, attas.numInstructors, 1));
+        attas.instructorMinQuota = flattenArray(excelToArray(oWS_instructorQuota, 2, 2, attas.numInstructors, 1));
+        attas.instructorPreassign = new List<(int, int, int)>();
+        for (int i = 0; i < attas.numInstructors; i++)
+            for (int j = 0; j < attas.numSlots; j++)
+            {
+                var content = oWS_instructorPreassign.Cells[i + 2, j + 2].Value2;
+                if (content != null)
+                {
+                    attas.instructorPreassign.Add((i, (int)content - 1, 1));
+                }
+            }
+        // AREA
+        attas.areaDistance = excelToArray(oWS_areaDistance, 2, 2, attas.numAreas, attas.numAreas);
+        attas.areaSlotCoefficient = excelToArray(oWS_areaSlotCoefficient, 2, 2, attas.numSlots, attas.numSlots);
+        // TASK
+        attas.taskSubjectMapping = excelToMapping(oWS_tasks, attas.numTasks, 2, subjectNames);
+        attas.taskSlotMapping = excelToMapping(oWS_tasks, attas.numTasks, 4, slotNames);
+        attas.taskAreaMapping = new int[attas.numTasks];
+        for (int i = 0; i < attas.numTasks; i++)
+            attas.taskAreaMapping[i] = 1;
         oWB.Close();
         oXL.Quit();
-        Console.WriteLine("Done");
+        return true;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"An exception occurred while writing output: {ex.Message}");
+        if ( oWB != null ) 
+            oWB.Close();
+        if ( oXL != null ) 
+            oXL.Quit();
+        return false;
+    }
+}
+static List<List<(int, int)>>? solve(ATTAS_ORTOOLS attas)
+{
+    List<List<(int, int)>>? results = null;
+    AnsiConsole.Status()
+    .Start("Solving...\n", ctx =>
+    {
+        results = attas.solve();
+    });
+    object[] statistics = attas.getStatistic();
+    // Create a table
+    var table = new Table();
+
+    // Add some columns
+    table.AddColumn("Stat");
+    table.AddColumn("Value");
+
+    // Add some rows
+    table.AddRow("Objective", $"{statistics[0]}");
+    table.AddRow("Status", $"{statistics[1]}");
+    table.AddRow("Conflicts", $"{statistics[2]}");
+    table.AddRow("Branches", $"{statistics[3]}");
+    table.AddRow("Wall Time", $"{statistics[4]}s");
+
+    // Render the table to the console
+    AnsiConsole.Write(table);
+    return results;
+}
+static void writeOutputExcel(string outputPath,ATTAS_ORTOOLS attas, List<List<(int, int)>>? results,ref string[] classNames,ref string[] slotNames,ref string[] instructorNames,ref string[] subjectNames) 
+{
+    var line = new Rule("Output");
+    line.LeftJustified();
+    AnsiConsole.Write(line);
+    if (results != null)
+    {
+        Application? oXL = null;
+        Workbook? oWB = null;
+        try
+        {
+            DateTime currentTime = DateTime.Now;
+            string currentTimeString = currentTime.ToString("yyyy-MM-ddTHH-mm-ss");
+            AnsiConsole.Markup($" - Start Export Result Into [underline green]{outputExcelFolderPath}\\result_{currentTimeString}.xlsx[/]\n");
+            oXL = new Application();
+            oWB = oXL.Workbooks.Add();
+            Worksheet oWS = oWB.ActiveSheet;
+            oWS.Name = "result";
+            for (int i = 0; i < attas.numInstructors; i++)
+            {
+                oWS.Cells[i + 2, 1] = instructorNames[i];
+                oWS.Cells[i + 2, 1].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.DarkOrange);
+                alignMiddle(oWS.Cells[i + 2, 1]);
+            }
+
+            oWS.Cells[attas.numInstructors + 2, 1] = "UNASSIGNED";
+            oWS.Cells[attas.numInstructors + 2, 1].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.DarkOrange);
+            alignMiddle(oWS.Cells[attas.numInstructors + 2, 1]);
+
+            for (int i = 0; i < attas.numSlots; i++)
+            {
+                oWS.Cells[1, i + 2] = slotNames[i];
+                oWS.Cells[1, i + 2].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.SteelBlue);
+                alignMiddle(oWS.Cells[1, i + 2]);
+            }
+
+            for (int i = 0; i <= attas.numInstructors + 1; i++)
+                for (int j = 0; j <= attas.numSlots; j++)
+                {
+                    fullBorder(oWS.Cells[i + 1, j + 1]);
+                }
+            List<(int, int)> tmp = results[0];
+            foreach ((int, int) result in tmp)
+                if (result.Item2 >= 0)
+                {
+                    oWS.Cells[result.Item2 + 2, attas.taskSlotMapping[result.Item1] + 2] = $"{result.Item1 + 1}.{classNames[result.Item1]}.{subjectNames[attas.taskSubjectMapping[result.Item1]]}";
+                }
+                else
+                {
+                    oWS.Cells[attas.numInstructors + 2, attas.taskSlotMapping[result.Item1] + 2] = oWS.Cells[attas.numInstructors + 2, attas.taskSlotMapping[result.Item1] + 2].Value + $"{result.Item1 + 1}.{classNames[result.Item1]}.{subjectNames[attas.taskSubjectMapping[result.Item1]]}\n";
+                }
+
+            oWS.Columns.AutoFit();
+            oWB.SaveAs($@"{outputExcelFolderPath}\result_{currentTimeString}.xlsx");
+            oWB.Close();
+            oXL.Quit();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"An exception occurred while writing output: {ex.ToString()}");                
+            if (oWB != null)
+                oXL.DisplayAlerts = false;
+                oWB.Close();
+            if (oXL != null) 
+                oXL.DisplayAlerts = true;
+                oXL.Quit();
+                
+        }
     }
     else
     {
-        Console.WriteLine("No Solution!");
+        AnsiConsole.Markup("\n[red]No solution to export[/]\n\n");
     }
 }
-catch (Exception ex)
-{
-    Console.WriteLine($"An exception occurred: {ex.Message}");
-}
-
 /*
 ################################
 ||       Excel Utility        ||
 ################################
 */
-static int[] excelToMapping(Excel._Worksheet oSheet,int numRows,int col, string[] namesArray)
+static int[] excelToMapping(Worksheet oSheet,int numRows,int col, string[] namesArray)
 {
     int[] mapping = new int[numRows];
-    Excel.Range oRng;
+    Microsoft.Office.Interop.Excel.Range oRng;
     for (int i = 2; i<=numRows+1; i++)
     {
         oRng = oSheet.Cells[i, col];
@@ -173,9 +271,9 @@ static int[] excelToMapping(Excel._Worksheet oSheet,int numRows,int col, string[
     }
     return mapping;
 }
-static int[,] excelToArray(Excel._Worksheet oSheet, int startRow, int startCol, int numRows, int numCols)
+static int[,] excelToArray(Worksheet oSheet, int startRow, int startCol, int numRows, int numCols)
 {
-    Excel.Range oRng;
+    Range oRng;
     oRng = oSheet.Cells[startRow, startCol].Resize[numRows, numCols];
     object[,] values = (object[,])oRng.Value;
     int[,] data = new int[numRows, numCols];
@@ -188,10 +286,10 @@ static int[,] excelToArray(Excel._Worksheet oSheet, int startRow, int startCol, 
     }
     return data;
 }
-static string[] excelToNameArray(Excel._Worksheet oSheet, int count, bool isColumn, int posrow, int poscol)
+static string[] excelToNameArray(Worksheet oSheet, int count, bool isColumn, int posrow, int poscol)
 {
     string[] data = new string[count];
-    Excel.Range oRng;
+    Range oRng;
     if (isColumn)
     {
         oRng = oSheet.Cells[posrow, poscol].Resize[count, 1];
@@ -212,38 +310,38 @@ static string[] excelToNameArray(Excel._Worksheet oSheet, int count, bool isColu
     }
     return data;
 }
-static void alignMiddle(Excel.Range range)
+static void alignMiddle(Range range)
 {
-    range.VerticalAlignment = Excel.XlVAlign.xlVAlignCenter;
-    range.HorizontalAlignment = Excel.XlHAlign.xlHAlignCenter;
+    range.VerticalAlignment = XlVAlign.xlVAlignCenter;
+    range.HorizontalAlignment = XlHAlign.xlHAlignCenter;
 }
-static void fullBorder(Excel.Range range)
+static void fullBorder(Range range)
 {
     // Set the border style, weight, and color
-    Excel.XlLineStyle lineStyle = Excel.XlLineStyle.xlContinuous;
-    Excel.XlBorderWeight lineWeight = Excel.XlBorderWeight.xlThin;
+    XlLineStyle lineStyle = XlLineStyle.xlContinuous;
+    XlBorderWeight lineWeight = XlBorderWeight.xlThin;
     object lineColor = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.Black);
 
     // Add the border to the top edge of the range
-    Excel.Border topBorder = range.Borders[Excel.XlBordersIndex.xlEdgeTop];
+    Border topBorder = range.Borders[XlBordersIndex.xlEdgeTop];
     topBorder.LineStyle = lineStyle;
     topBorder.Weight = lineWeight;
     topBorder.Color = lineColor;
 
     // Add the border to the bottom edge of the range
-    Excel.Border bottomBorder = range.Borders[Excel.XlBordersIndex.xlEdgeBottom];
+    Border bottomBorder = range.Borders[XlBordersIndex.xlEdgeBottom];
     bottomBorder.LineStyle = lineStyle;
     bottomBorder.Weight = lineWeight;
     bottomBorder.Color = lineColor;
 
     // Add the border to the left edge of the range
-    Excel.Border leftBorder = range.Borders[Excel.XlBordersIndex.xlEdgeLeft];
+    Border leftBorder = range.Borders[XlBordersIndex.xlEdgeLeft];
     leftBorder.LineStyle = lineStyle;
     leftBorder.Weight = lineWeight;
     leftBorder.Color = lineColor;
 
     // Add the border to the right edge of the range
-    Excel.Border rightBorder = range.Borders[Excel.XlBordersIndex.xlEdgeRight];
+    Border rightBorder = range.Borders[XlBordersIndex.xlEdgeRight];
     rightBorder.LineStyle = lineStyle;
     rightBorder.Weight = lineWeight;
     rightBorder.Color = lineColor;
@@ -285,4 +383,40 @@ static int[] flattenArray(int[,] data)
     }
     return flattened;
 }
-
+static void Log2DArray(int[,] array)
+{
+    for (int i = 0; i < array.GetLength(0); i++)
+    {
+        for (int j = 0; j < array.GetLength(1); j++)
+        {
+            Console.Write($"{array[i, j]} ");
+        }
+        Console.WriteLine();
+    }
+}
+static void LogResult(List<List<(int,int)>> results,int size)
+{
+    if (results != null)
+    {
+        List<(int, int)> tmp = results[0];
+        Console.Write("[");
+        for (int i = 0; i < size; i++)
+        {
+            Console.Write(tmp[i].Item2);
+            if (i != size - 1)
+            {
+                Console.Write(",");
+            }
+        }
+        Console.Write("]");
+    }
+}
+static void cleanCOM()
+{
+    do
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+    }
+    while (Marshal.AreComObjectsAvailableForCleanup());
+}
