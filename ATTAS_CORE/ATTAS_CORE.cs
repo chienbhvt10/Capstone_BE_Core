@@ -2,24 +2,8 @@
 
 namespace ATTAS_CORE
 {
-    /*
-    ################################
-    ||       START OR-TOOLS       ||
-    ################################
-    */
-    public class ATTAS_ORTOOLS
+    public class ATTAS_BASE
     {
-        /*
-        ################################
-        ||           Option           ||
-        ################################
-        */
-        public double maxSearchingTimeOption { get; set; } = 300.0;
-        public int strategyOption { get; set; } = 2;
-        public int[] objOption { get; set; } = new int[8] { 1, 1, 0, 0, 0, 0, 0, 0 };
-        public int[] objWeight { get; set; } = new int[8] { 50 ,25, 1, 1, 1, 1, 1, 1 };
-        public bool debugLoggerOption { get; set; } = false;
-
         /*
         ################################
         ||      SOLVER PARAMETER      ||
@@ -37,19 +21,19 @@ namespace ATTAS_CORE
         public int numBackupInstructors { get; set; } = 0;
         public int numAreas { get; set; } = 0;
         //RANGE
-        private int[] allSubjects = Array.Empty<int>();
-        private int[] allTasks = Array.Empty<int>();
-        private int[] allSlots = Array.Empty<int>();
-        private int[] allDays = Array.Empty<int>();
-        private int[] allTimes = Array.Empty<int>();
-        private int[] allSegments = Array.Empty<int>();
-        private int[] allInstructors = Array.Empty<int>();
-        private int[] allInstructorsWithBackup = Array.Empty<int>();
+        public int[] allSubjects = Array.Empty<int>();
+        public int[] allTasks = Array.Empty<int>();
+        public int[] allSlots = Array.Empty<int>();
+        public int[] allDays = Array.Empty<int>();
+        public int[] allTimes = Array.Empty<int>();
+        public int[] allSegments = Array.Empty<int>();
+        public int[] allInstructors = Array.Empty<int>();
+        public int[] allInstructorsWithBackup = Array.Empty<int>();
         //INPUT DATA
         public int[,] slotConflict { get; set; } = new int[0, 0];
         public int[,] slotDay { get; set; } = new int[0, 0];
         public int[,] slotTime { get; set; } = new int[0, 0];
-        public int[,,] slotSegment { get; set; } = new int[0, 0 ,0];
+        public int[,,] slotSegment { get; set; } = new int[0, 0, 0];
         public int[] patternCost { get; set; } = Array.Empty<int>();
         public int[,] instructorSubject { get; set; } = new int[0, 0];
         public int[,] instructorSubjectPreference { get; set; } = new int[0, 0];
@@ -62,25 +46,7 @@ namespace ATTAS_CORE
         public int[] taskSlotMapping { get; set; } = Array.Empty<int>();
         public int[] taskAreaMapping { get; set; } = Array.Empty<int>();
         public int[,] areaDistance { get; set; } = new int[0, 0];
-        public int[,] areaSlotCoefficient { get; set; } = new int[0, 0];  
-
-        /*
-        ################################
-        ||           MODEL            ||
-        ################################
-         */
-
-        private CpModel model;
-        CpSolver solver;
-        CpSolverStatus status;
-        // Desicion variable
-        private Dictionary<(int, int), BoolVar> assigns;
-        private Dictionary<(int, int), BoolVar> instructorDayStatus;
-        private Dictionary<(int, int, int), BoolVar> instructorTimeStatus;
-        private Dictionary<(int, int), BoolVar> instructorSubjectStatus;
-        private Dictionary<(int, int, int), BoolVar> instructorSegmentStatus;
-        private Dictionary<(int, int, int), BoolVar> instructorPatternStatus;
-        private Dictionary<(int, int), LinearExpr> assignsProduct;
+        public int[,] areaSlotCoefficient { get; set; } = new int[0, 0];
         public void setSolverCount()
         {
             allSubjects = Enumerable.Range(0, numSubjects).ToArray();
@@ -101,6 +67,43 @@ namespace ATTAS_CORE
                 allInstructorsWithBackup = Enumerable.Range(0, numInstructors).ToArray();
             }
         }
+    }
+    /*
+    ################################
+    ||       START OR-TOOLS       ||
+    ################################
+    */
+    public class ATTAS_ORTOOLS : ATTAS_BASE
+    {
+        /*
+        ################################
+        ||           Option           ||
+        ################################
+        */
+        public double maxSearchingTimeOption { get; set; } = 300.0;
+        public int strategyOption { get; set; } = 2;
+        public int[] objOption { get; set; } = new int[8] { 1, 1, 0, 0, 0, 0, 0, 0 };
+        public int[] objWeight { get; set; } = new int[8] { 50 ,25, 1, 1, 1, 1, 1, 1 };
+        public bool debugLoggerOption { get; set; } = false;
+
+        /*
+        ################################
+        ||           MODEL            ||
+        ################################
+         */
+
+        private CpModel model;
+        CpSolver solver;
+        CpSolverStatus status;
+        // Desicion variable
+        private Dictionary<(int, int), BoolVar> assigns;
+        private Dictionary<(int, int), BoolVar> instructorDayStatus;
+        private Dictionary<(int, int, int), BoolVar> instructorTimeStatus;
+        private Dictionary<(int, int), BoolVar> instructorSubjectStatus;
+        private Dictionary<(int, int, int), BoolVar> instructorSegmentStatus;
+        private Dictionary<(int, int, int), BoolVar> instructorPatternStatus;
+        private Dictionary<(int, int), LinearExpr> assignsProduct;
+
         public void createModel()
         {
             model = new CpModel(); 
@@ -636,12 +639,6 @@ namespace ATTAS_CORE
         public object[] getStatistic()
         {
             return new object[] { solver.ObjectiveValue,status.ToString(), solver.NumConflicts(), solver.NumBranches(), solver.WallTime() };
-/*            Console.WriteLine("Statistics");
-            Console.WriteLine($"  {strategyOption}: {}");
-            Console.WriteLine($"  status: {status}");
-            Console.WriteLine($"  conflicts: {solver.NumConflicts()}");
-            Console.WriteLine($"  branches : {solver.NumBranches()}");
-            Console.WriteLine($"  wall time: {solver.WallTime()}s");*/
         }
         public LinearExpr createDelta(int maxDelta,LinearExpr actualValue,int targetValue)
         {
