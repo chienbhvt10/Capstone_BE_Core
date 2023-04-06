@@ -1,4 +1,5 @@
 ﻿using ATTAS_API.Models;
+using OperationsResearch;
 using System;
 using System.Data.SqlClient;
 
@@ -265,6 +266,163 @@ namespace ATTAS_API.Utils
                     connection.Close();
                 }
                 return false;
+            }
+        }
+        public Session getSession(string hash)
+        {
+            Session session = new Session();
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                try
+                {
+                    connection.Open();
+                    string sql = "SELECT * FROM [session] WHERE sessionHash=@hash";
+                    using (SqlCommand command = new SqlCommand(sql, connection))
+                    {
+                        command.Parameters.AddWithValue("@hash", hash);
+                        SqlDataReader reader = command.ExecuteReader();
+                        while (reader.Read())
+                        {
+                            session.id = (int)reader[0];
+                            session.hash = (string)reader[1];
+                            session.statusId = (int)reader[2];
+                            session.solutionCount = (int)reader[3];
+                            connection.Close();
+                            return session;
+                        }
+                        reader.Close();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error SQL Server : {ex.Message}");
+                    return null;
+                }
+                finally
+                {
+                    connection.Close();
+                }
+                return null;
+            }
+        }
+        public Solution getSolution(int sessionId,int no)
+        {
+            Solution solution = new Solution();
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                try
+                {
+                    connection.Open();
+                    string sql = "SELECT * FROM [solution] WHERE sessionId=@sessionid AND no=@no";
+                    using (SqlCommand command = new SqlCommand(sql, connection))
+                    {
+                        command.Parameters.AddWithValue("@sessionid", sessionId);
+                        command.Parameters.AddWithValue("@no", no);
+                        SqlDataReader reader = command.ExecuteReader();
+                        while (reader.Read())
+                        {
+                            solution.Id = (int)reader[0];
+                            solution.sessionId = (int)reader[1];
+                            solution.no = (int)reader[2];
+                            solution.taskAssigned = (int)reader[3];
+                            solution.workingDay = (int)reader[4];
+                            solution.workingTime = (int)reader[5];
+                            solution.waitingTime = (int)reader[6];
+                            solution.subjectDiversity = (int)reader[7];
+                            solution.quotaAvailable= (int)reader[8];
+                            solution.walkingDistance = (int)reader[9];
+                            solution.subjectPreference = (int)reader[10];
+                            solution.slotPreference = (int)reader[11];
+                            connection.Close();
+                            return solution;
+                        }
+                        reader.Close();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error SQL Server : {ex.Message}");
+                    return null;
+                }
+                finally
+                {
+                    connection.Close();
+                }
+                return null;
+            }
+        }
+        public List<Assigned> getResult(int solutionId,int sessionId)
+        {
+            List<Assigned> assigneds = new List<Assigned>();
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                try
+                {
+                    connection.Open();
+                    string sql = "SELECT * FROM [result] WHERE solutionId=@solutionid";
+                    using (SqlCommand command = new SqlCommand(sql, connection))
+                    {
+                        command.Parameters.AddWithValue("@solutionid", solutionId);
+                        SqlDataReader reader = command.ExecuteReader();
+                        while (reader.Read())
+                        {
+                            Assigned assigned = new Assigned();
+                            assigned.taskId = getBusinessId("task", sessionId, (int)reader[2]);
+                            assigned.instructorId = getBusinessId("instructor",sessionId, (int)reader[3]);
+                            assigned.slotId = getBusinessId("time", sessionId, (int)reader[4]);
+                            assigneds.Add(assigned);
+                            
+                        }
+                        reader.Close();
+                        connection.Close();
+                        return assigneds;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error SQL Server : {ex.Message}");
+                    return null;
+                }
+                finally
+                {
+                    connection.Close();
+                }
+                return null;
+            }
+        }
+        public string getBusinessId(string table,int sessionId,int order)
+        {
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                try
+                {
+                    connection.Open();
+                    string sql = $"SELECT * FROM [{table}] WHERE sessionId=@sessionid AND [order]=@order";
+                    using (SqlCommand command = new SqlCommand(sql, connection))
+                    {
+                        command.Parameters.AddWithValue("@sessionid", sessionId);
+                        command.Parameters.AddWithValue("@order", order);
+                        SqlDataReader reader = command.ExecuteReader();
+                        while (reader.Read())
+                        {
+                            string tmp = (string)reader[2];
+                            reader.Close();
+                            connection.Close();
+                            return tmp;
+                        }
+                        
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error SQL Server : {ex.Message}");
+                    return null;
+                }
+                finally
+                {
+                    connection.Close();
+                }
+                return null;
             }
         }
     }

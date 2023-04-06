@@ -4,6 +4,6 @@
     {
         public string taskId { get; set; }
         public string instructorId { get; set; }
-        public int slotId { get; set; }
+        public string slotId { get; set; }
     }
 }
