@@ -37,13 +37,46 @@ namespace ATTAS_API.Controllers
         }
 
         [HttpPost("get")]
-        public IActionResult get()
+        public IActionResult get([FromBody] GetData data)
         {
-            Result result = new Result();
-            var json = JsonSerializer.Serialize(result);
-            return Ok(json);
+            SqlServerConnector connector = new SqlServerConnector("SAKURA", "attas", "sa", "12345678");
+            if (connector.validToken(data.token))
+            {
+                Result result = new Result();
+                Session session = connector.getSession(data.sessionHash);
+                if(session != null)
+                {
+                    result.status = session.statusId;
+                    result.numberofsolution = session.solutionCount;
+                }
+                else
+                {
+                    var message = new { message = "Invalid Session Hash" };
+                    return BadRequest("message");
+                }
+                Solution solution = connector.getSolution(session.id, data.solutionNo);
+                if(solution!= null)
+                {
+                    result.taskAssigned = solution.taskAssigned;
+                    result.workingDay = solution.workingDay;
+                    result.workingTime = solution.workingTime;
+                    result.waitingTime = solution.waitingTime;
+                    result.subjectDiversity= solution.subjectDiversity;
+                    result.quotaAvailable = solution.quotaAvailable;
+                    result.walkingDistance = solution.walkingDistance;
+                    result.subjectPreference = solution.subjectPreference;
+                    result.slotPreference = solution.slotPreference;
+                    result.results = connector.getResult(solution.Id,session.id);
+                }
+                var json = JsonSerializer.Serialize(result);
+                return Ok(json);
+            }
+            else
+            {
+                var message = new { message = "Invalid Token" };
+                return BadRequest(message);
+            }
         }
-
         static void Solve(object data)
         {
             Data _data = (Data)data;
