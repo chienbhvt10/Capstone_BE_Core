@@ -76,16 +76,28 @@ namespace ATTAS_API.Controllers
             attas.numTasks = _data.numTasks;
             attas.numInstructors = _data.numInstructors;
             attas.numSlots = _data.numSlots;
+            attas.numDays = _data.numDays;
+            attas.numTimes = _data.numTimes;
+            attas.numSegments = _data.numSegments;
+            int numSegmentRule = _data.numSegmentRules;
             attas.numSubjects = _data.numSubjects;
             attas.numAreas = _data.numAreas;
             attas.numBackupInstructors = _data.backupInstructor;
             attas.slotConflict = listToArray(_data.slotConflict);
-            attas.slotCompatibilityCost = listToArray(_data.slotCompability);
+            attas.slotDay = listToArray(_data.slotDay);
+            attas.slotTime = listToArray(_data.slotTime);
+            attas.slotSegment = new int[attas.numSlots, attas.numDays, attas.numSegments]; 
+            for (int i = 0; i < numSegmentRule; i++)
+            {
+                attas.slotSegment[_data.slotSegment[i][0], _data.slotSegment[i][1], _data.slotSegment[i][2]] = 1;
+            }
+            attas.patternCost = _data.patternCost.ToArray();
             attas.instructorSubjectPreference = listToArray(_data.instructorSubject);
             attas.instructorSubject = toBinaryArray(attas.instructorSubjectPreference);
             attas.instructorSlotPreference = listToArray(_data.instructorSlot);
             attas.instructorSlot = toBinaryArray(attas.instructorSlotPreference);
             attas.instructorQuota = _data.instructorQuota.ToArray();
+            attas.instructorMinQuota = _data.instructorMinQuota.ToArray();
             attas.instructorPreassign = new List<(int, int, int)>();
             if (_data.preassigns != null)
             {
@@ -95,7 +107,7 @@ namespace ATTAS_API.Controllers
                 }
             }
             attas.areaDistance = listToArray(_data.areaDistance);
-            attas.areaSlotWeight = listToArray(_data.areaSlotCoefficient);
+            attas.areaSlotCoefficient = listToArray(_data.areaSlotCoefficient);
             attas.taskSubjectMapping = new int[attas.numTasks];
             attas.taskSlotMapping = new int[attas.numTasks];
             attas.taskAreaMapping = new int[attas.numTasks];
@@ -116,50 +128,92 @@ namespace ATTAS_API.Controllers
                 int no = 1;
                 foreach (var result in results)
                 {
-                    int taskAssigned = 0;
-                    int slotCompability = 0;
-                    int subjectDiversity = 0;
-                    int quotaAvailable = 0;
-                    int walkingDistance = 0;
-                    int subjectPreference = 0;
-                    int slotPreference = 0;
-                    for (int i = 0; i < attas.numTasks; i++)
+                    var sorted = result.OrderBy(t => t.Item2);
+                    int currentId = -1;
+                    int objQuota = 0;
+                    int[] objDay = new int[attas.numDays];
+                    int[,] objTime = new int[attas.numDays, attas.numTimes];
+                    int objWaiting = 0;
+                    int[] objSubjectDiversity = new int[attas.numSubjects];
+                    int objQuotaAvailable = 0;
+                    int objWalkingDistance = 0;
+                    int objSubjectPreference = 0;
+                    int objSlotPreference = 0;
+
+                    int finalQuota = 0;
+                    int finalDay = 0;
+                    int finalTime = 0;
+                    int finalWaiting = 0;
+                    int finalSubjectDiversity = 0;
+                    int finalQuotaAvailable = 0;
+                    int finalWalkingDistance = 0;
+                    int finalSubjectPreference = 0;
+                    int finalSlotPreference = 0;
+
+                    List<int> tasks = new List<int>();
+                    foreach (var item in sorted)
                     {
-                        if (result[i].Item2 != -1)
+                        if (currentId != item.Item2)
                         {
-                            taskAssigned++;
-                            subjectPreference += attas.instructorSubjectPreference[result[i].Item2, attas.taskSubjectMapping[i]];
-                            slotPreference += attas.instructorSlotPreference[result[i].Item2, attas.taskSlotMapping[i]];
-                        }
-                    }
-                    List<List<int>> grouped = new List<List<int>>();
-                    for (int i = 0; i < attas.numInstructors; i++)
-                    {
-                        grouped.Add(new List<int>());
-                    }
-                    
-                    foreach (var item in result)
-                    {
-                        if (item.Item2 != -1)
-                        {
-                            grouped[item.Item2].Add(item.Item1);
-                        }
-                    }
-                    for (int idx = 0; idx < attas.numInstructors; idx++)
-                    {
-                        int n = grouped[idx].Count;
-                        subjectDiversity = Math.Max(subjectDiversity,(from x in grouped[idx] select attas.taskSubjectMapping[x]).Distinct().Count());
-                        quotaAvailable = Math.Max(quotaAvailable, attas.instructorQuota[idx] - n);
-                        for (int i = 0; i < n - 1; i++)
-                        {
-                            for (int j = i + 1; j < n; j++)
+                            if (currentId != -1)
                             {
-                                slotCompability += attas.slotCompatibilityCost[attas.taskSlotMapping[grouped[idx][i]], attas.taskSlotMapping[grouped[idx][j]]];
-                                walkingDistance += attas.areaSlotWeight[attas.taskSlotMapping[grouped[idx][i]], attas.taskSlotMapping[grouped[idx][j]]] * attas.areaDistance[attas.taskAreaMapping[grouped[idx][i]], attas.taskAreaMapping[grouped[idx][j]]];
+                                finalQuota += objQuota;
+                                finalDay += objDay.Sum();
+                                finalTime += flattenArray(objTime).Sum();
+                                finalWaiting += calObjWaitingTime(tasks, attas);
+                                finalSubjectDiversity = Math.Max(finalSubjectDiversity, objSubjectDiversity.Sum() );
+                                finalQuotaAvailable = Math.Max(finalQuotaAvailable, attas.instructorQuota[currentId] - objQuota);
+                                finalWalkingDistance += calObjWalkingDistance(tasks, attas);
+                                finalSubjectPreference += objSubjectPreference;
+                                finalSlotPreference += objSlotPreference;
+                            }
+                            //reset
+                            objQuota = 0;
+                            Array.Clear(objDay, 0, objDay.Length);
+                            Array.Clear(objTime, 0, objTime.Length);
+                            objWaiting = 0;
+                            Array.Clear(objSubjectDiversity, 0, objSubjectDiversity.Length);
+                            objQuotaAvailable = 0;
+                            objWalkingDistance = 0;
+                            objSubjectPreference = 0;
+                            objSlotPreference = 0;
+                            tasks.Clear();
+                            currentId = item.Item2;
+                        }
+                        tasks.Add(item.Item1);
+                        int thisTaskSlot = attas.taskSlotMapping[item.Item1];
+                        int thisTaskSubject = attas.taskSubjectMapping[item.Item1];
+                        objQuota += 1;
+                        for (int d = 0; d < attas.numDays; d++)
+                        {
+                            if (attas.slotDay[thisTaskSlot, d] == 1)
+                            {
+                                objDay[d] = 1;
+                                for (int t = 0; t < attas.numTimes; t++)
+                                {
+                                    if (attas.slotTime[thisTaskSlot, t] == 1)
+                                        objTime[d, t] = 1;
+                                }
                             }
                         }
+                        objSubjectDiversity[thisTaskSubject] = 1;
+                        objSubjectPreference += attas.instructorSubjectPreference[item.Item2, thisTaskSubject];
+                        objSlotPreference += attas.instructorSlotPreference[item.Item2, thisTaskSlot];
                     }
-                    int solutionId = connector.addSolution(sessionId, no, taskAssigned, slotCompability, subjectDiversity, quotaAvailable, walkingDistance, subjectPreference, slotPreference);
+                    if (currentId != -1)
+                    {
+                        finalQuota += objQuota;
+                        finalDay += objDay.Sum();
+                        finalTime += flattenArray(objTime).Sum();
+                        finalWaiting += calObjWaitingTime(tasks, attas);
+                        finalSubjectDiversity = Math.Max(finalSubjectDiversity, objSubjectDiversity.Sum());
+                        finalQuotaAvailable = Math.Max(finalQuotaAvailable, attas.instructorQuota[currentId] - objQuota);
+                        finalWalkingDistance += calObjWalkingDistance(tasks, attas);
+                        finalSubjectPreference += objSubjectPreference;
+                        finalSlotPreference += objSlotPreference;
+                    }
+
+                    int solutionId = connector.addSolution(sessionId, no, finalQuota, finalDay,finalTime,finalWaiting,finalSubjectDiversity,finalQuotaAvailable, finalWalkingDistance, finalSubjectPreference, finalSlotPreference);
                     foreach (var item in result)
                     {
                         connector.addResult(solutionId, item.Item1, item.Item2, attas.taskSlotMapping[item.Item1]);
@@ -182,6 +236,65 @@ namespace ATTAS_API.Controllers
             {
                 connector.updateSessionStatus(sessionId, 3, 0);
             }
+        }
+        /*
+        ################################
+        ||    CALCULATE OBJECTIVE     ||
+        ################################
+        */
+        static int calObjWalkingDistance(List<int> tasks, ATTAS_ORTOOLS attas)
+        {
+            int distance = 0;
+            int n = tasks.Count();
+            for (int i = 0; i < n - 1; i++)
+                for (int j = i + 1; j < n; j++)
+                {
+                    int t1 = tasks[i];
+                    int t2 = tasks[j];
+                    distance += attas.areaSlotCoefficient[attas.taskSlotMapping[t1], attas.taskSlotMapping[t2]] * attas.areaDistance[attas.taskAreaMapping[t1], attas.taskAreaMapping[t2]];
+                }
+            return distance;
+        }
+        static int calObjWaitingTime(List<int> tasks, ATTAS_ORTOOLS attas)
+        {
+            int result = 0;
+            int[,] flag = new int[attas.numDays, attas.numSegments];
+            foreach (int task in tasks)
+            {
+                int slot = attas.taskSlotMapping[task];
+                foreach (int d in attas.allDays)
+                    foreach (int s in attas.allSegments)
+                        if (attas.slotSegment[slot, d, s] == 1)
+                            flag[d, s] = 1;
+            }
+            foreach (int d in attas.allDays)
+            {
+                int pattern = 0;
+                foreach (int s in attas.allSegments)
+                    pattern += flag[d, s] * (1 << (attas.numSegments - s - 1));
+                result += attas.patternCost[pattern];
+            }
+            return result;
+        }
+        /*
+        ################################
+        ||          UTILITY           ||
+        ################################
+        */
+        static int[] flattenArray(int[,] data)
+        {
+            int numRows = data.GetLength(0);
+            int numColumns = data.GetLength(1);
+            int[] flattened = new int[numRows * numColumns];
+            int k = 0;
+            for (int i = 0; i < numRows; i++)
+            {
+                for (int j = 0; j < numColumns; j++)
+                {
+                    flattened[k++] = data[i, j];
+                }
+            }
+            return flattened;
         }
         static int[,] listToArray(List<List<int>> list)
         {

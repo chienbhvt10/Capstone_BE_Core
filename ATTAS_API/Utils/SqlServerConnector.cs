@@ -166,25 +166,27 @@ namespace ATTAS_API.Utils
                 }
             }
         }
-        public int addSolution(int sessionId, int no,int taskAssigned,int slotCompability,int subjectDiversity,int quotaAvailabe,int walkingDistance,int subjectPreference,int slotPreference)
+        public int addSolution(int sessionId, int no,int taskAssigned,int workingDay,int workingTime,int waitingTime,int subjectDiversity,int quotaAvailabe,int walkingDistance,int subjectPreference,int slotPreference)
         {
             using (SqlConnection connection = new SqlConnection(connectionString))
             {
                 try
                 {
                     connection.Open();
-                    string sql = "INSERT INTO [solution] (sessionId,no,taskAssigned,slotCompability,subjectDiversity,quotaAvailable,walkingDistance,subjectPreference,slotPreference) OUTPUT INSERTED.ID VALUES (@val0, @val1, @val2, @val3, @val4, @val5, @val6, @val7, @val8)";
+                    string sql = "INSERT INTO [solution] (sessionId,no,taskAssigned,workingDay,workingTime,waitingTime,subjectDiversity,quotaAvailable,walkingDistance,subjectPreference,slotPreference) OUTPUT INSERTED.ID VALUES (@val0, @val1, @val2, @val3, @val4, @val5, @val6, @val7, @val8, @val9, @val10 )";
                     using (SqlCommand command = new SqlCommand(sql, connection))
                     {
                         command.Parameters.AddWithValue("@val0", sessionId);
                         command.Parameters.AddWithValue("@val1", no);
                         command.Parameters.AddWithValue("@val2", taskAssigned);
-                        command.Parameters.AddWithValue("@val3", slotCompability);
-                        command.Parameters.AddWithValue("@val4", subjectDiversity);
-                        command.Parameters.AddWithValue("@val5", quotaAvailabe);
-                        command.Parameters.AddWithValue("@val6", walkingDistance);
-                        command.Parameters.AddWithValue("@val7", subjectPreference);
-                        command.Parameters.AddWithValue("@val8", slotPreference);
+                        command.Parameters.AddWithValue("@val3", workingDay);
+                        command.Parameters.AddWithValue("@val4", workingTime);
+                        command.Parameters.AddWithValue("@val5", waitingTime);
+                        command.Parameters.AddWithValue("@val6", subjectDiversity);
+                        command.Parameters.AddWithValue("@val7", quotaAvailabe);
+                        command.Parameters.AddWithValue("@val8", walkingDistance);
+                        command.Parameters.AddWithValue("@val9", subjectPreference);
+                        command.Parameters.AddWithValue("@val10", slotPreference);
 
                         int insertedId = (int)command.ExecuteScalar();
                         connection.Close();
