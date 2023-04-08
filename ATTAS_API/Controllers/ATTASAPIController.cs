@@ -213,25 +213,28 @@ namespace ATTAS_API.Controllers
                             tasks.Clear();
                             currentId = item.Item2;
                         }
-                        tasks.Add(item.Item1);
-                        int thisTaskSlot = attas.taskSlotMapping[item.Item1];
-                        int thisTaskSubject = attas.taskSubjectMapping[item.Item1];
-                        objQuota += 1;
-                        for (int d = 0; d < attas.numDays; d++)
+                        if (currentId != -1)
                         {
-                            if (attas.slotDay[thisTaskSlot, d] == 1)
+                            tasks.Add(item.Item1);
+                            int thisTaskSlot = attas.taskSlotMapping[item.Item1];
+                            int thisTaskSubject = attas.taskSubjectMapping[item.Item1];
+                            objQuota += 1;
+                            for (int d = 0; d < attas.numDays; d++)
                             {
-                                objDay[d] = 1;
-                                for (int t = 0; t < attas.numTimes; t++)
+                                if (attas.slotDay[thisTaskSlot, d] == 1)
                                 {
-                                    if (attas.slotTime[thisTaskSlot, t] == 1)
-                                        objTime[d, t] = 1;
+                                    objDay[d] = 1;
+                                    for (int t = 0; t < attas.numTimes; t++)
+                                    {
+                                        if (attas.slotTime[thisTaskSlot, t] == 1)
+                                            objTime[d, t] = 1;
+                                    }
                                 }
                             }
+                            objSubjectDiversity[thisTaskSubject] = 1;
+                            objSubjectPreference += attas.instructorSubjectPreference[item.Item2, thisTaskSubject];
+                            objSlotPreference += attas.instructorSlotPreference[item.Item2, thisTaskSlot];
                         }
-                        objSubjectDiversity[thisTaskSubject] = 1;
-                        objSubjectPreference += attas.instructorSubjectPreference[item.Item2, thisTaskSubject];
-                        objSlotPreference += attas.instructorSlotPreference[item.Item2, thisTaskSlot];
                     }
                     if (currentId != -1)
                     {
