@@ -4,12 +4,12 @@ namespace ATTAS_CORE
 {
     public class ATTAS_BASE
     {
-        /*
-        ################################
-        ||      SOLVER PARAMETER      ||
-        ################################
-        */
-
+        //Option
+        public double maxSearchingTimeOption { get; set; } = 300.0;
+        public int strategyOption { get; set; } = 2;
+        public int[] objOption { get; set; } = new int[8] { 1, 1, 0, 0, 0, 0, 0, 0 };
+        public int[] objWeight { get; set; } = new int[8] { 50, 25, 1, 1, 1, 1, 1, 1 };
+        public bool debugLoggerOption { get; set; } = false;
         //COUNT
         public int numSubjects { get; set; } = 0;
         public int numTasks { get; set; } = 0;
@@ -59,8 +59,16 @@ namespace ATTAS_CORE
             if (numBackupInstructors > 0)
             {
                 allInstructorsWithBackup = Enumerable.Range(0, numInstructors + 1).ToArray();
-                instructorQuota = instructorQuota.Concat(new int[] { numBackupInstructors }).ToArray();
-                instructorMinQuota = instructorMinQuota.Concat(new int[] { 0 }).ToArray();
+                if (instructorQuota.Length <= numInstructors)
+                {
+                    instructorQuota = instructorQuota.Concat(new int[] { numBackupInstructors }).ToArray();
+                    instructorMinQuota = instructorMinQuota.Concat(new int[] { 0 }).ToArray();
+                }
+                else
+                {
+                    instructorQuota[numInstructors] = numBackupInstructors;
+                    instructorMinQuota[numInstructors] = 0;
+                }
             }
             else
             {
@@ -68,30 +76,13 @@ namespace ATTAS_CORE
             }
         }
     }
-    /*
-    ################################
-    ||       START OR-TOOLS       ||
-    ################################
-    */
     public class ATTAS_ORTOOLS : ATTAS_BASE
     {
-        /*
-        ################################
-        ||           Option           ||
-        ################################
-        */
-        public double maxSearchingTimeOption { get; set; } = 300.0;
-        public int strategyOption { get; set; } = 2;
-        public int[] objOption { get; set; } = new int[8] { 1, 1, 0, 0, 0, 0, 0, 0 };
-        public int[] objWeight { get; set; } = new int[8] { 50 ,25, 1, 1, 1, 1, 1, 1 };
-        public bool debugLoggerOption { get; set; } = false;
-
         /*
         ################################
         ||           MODEL            ||
         ################################
          */
-
         private CpModel model;
         CpSolver solver;
         CpSolverStatus status;
@@ -196,55 +187,7 @@ namespace ATTAS_CORE
                     model.Add(instructorSlot[i, taskSlotMapping[n]] - assigns[(n, i)] > -1);
             
         }
-        public List<List<(int, int)>>? constraintOnly()
-        {
-            setSolverCount();
-            createModel();
-            List<ILiteral> obj = new List<ILiteral> ();
-            foreach (int n in allTasks)
-                foreach (int i in allInstructors)
-                    obj.Add(assigns[(n, i)]);
-            model.Minimize( createDelta( numTasks ,LinearExpr.Sum(obj),numTasks ));
-            solver = new CpSolver();
-            solver.StringParameters += "linearization_level:0 " + $"max_time_in_seconds:{maxSearchingTimeOption} ";
-            status = solver.Solve(model);
-
-            if (debugLoggerOption)
-            {
-                Console.WriteLine("Statistics");
-                Console.WriteLine($"  {strategyOption}: {solver.ObjectiveValue}");
-                Console.WriteLine($"  status: {status}");
-                Console.WriteLine($"  conflicts: {solver.NumConflicts()}");
-                Console.WriteLine($"  branches : {solver.NumBranches()}");
-                Console.WriteLine($"  wall time: {solver.WallTime()}s");
-            }
-            if (status == CpSolverStatus.Optimal || status == CpSolverStatus.Feasible)
-                return getResults(solver);
-            else return null;
-        }
-        public int findBackupInstructor()
-        {
-            numBackupInstructors = numTasks;
-            setSolverCount();
-            createModel();
-            List<ILiteral> obj = new List<ILiteral>();
-            foreach (int n in allTasks)
-                foreach (int i in allInstructors)
-                    obj.Add(assigns[(n, i)]);
-            model.Minimize(createDelta(numTasks, LinearExpr.Sum(obj), numTasks));
-            solver = new CpSolver();
-            solver.StringParameters += "linearization_level:0 " + $"max_time_in_seconds:{maxSearchingTimeOption} ";
-            status = solver.Solve(model);
-            if (status == CpSolverStatus.Optimal || status == CpSolverStatus.Feasible)
-                return (int)solver.ObjectiveValue;
-            else 
-                return numTasks;
-        }
-        /*
-        ################################
-        ||         OBJECTIVE          ||
-        ################################
-        */
+        #region Objective Function
 
         // O-01 MINIMIZE DAY
         public LinearExpr objTeachingDay()
@@ -351,6 +294,52 @@ namespace ATTAS_CORE
             }
             return LinearExpr.WeightedSum(assignedTasks, assignedTaskSlotPreferences);
         }
+        #endregion
+        #region Solve
+        public int findBackupInstructor()
+        {
+            numBackupInstructors = numTasks;
+            setSolverCount();
+            createModel();
+            List<ILiteral> obj = new List<ILiteral>();
+            foreach (int n in allTasks)
+                foreach (int i in allInstructors)
+                    obj.Add(assigns[(n, i)]);
+            model.Minimize(createDelta(numTasks, LinearExpr.Sum(obj), numTasks));
+            solver = new CpSolver();
+            solver.StringParameters += "linearization_level:0 " + $"max_time_in_seconds:{maxSearchingTimeOption} ";
+            status = solver.Solve(model);
+            if (status == CpSolverStatus.Optimal || status == CpSolverStatus.Feasible)
+                return (int)solver.ObjectiveValue;
+            else
+                return numTasks;
+        }
+        public List<List<(int, int)>>? constraintOnly()
+        {
+            setSolverCount();
+            createModel();
+            List<ILiteral> obj = new List<ILiteral>();
+            foreach (int n in allTasks)
+                foreach (int i in allInstructors)
+                    obj.Add(assigns[(n, i)]);
+            model.Minimize(createDelta(numTasks, LinearExpr.Sum(obj), numTasks));
+            solver = new CpSolver();
+            solver.StringParameters += "linearization_level:0 " + $"max_time_in_seconds:{maxSearchingTimeOption} ";
+            status = solver.Solve(model);
+
+            if (debugLoggerOption)
+            {
+                Console.WriteLine("Statistics");
+                Console.WriteLine($"  {strategyOption}: {solver.ObjectiveValue}");
+                Console.WriteLine($"  status: {status}");
+                Console.WriteLine($"  conflicts: {solver.NumConflicts()}");
+                Console.WriteLine($"  branches : {solver.NumBranches()}");
+                Console.WriteLine($"  wall time: {solver.WallTime()}s");
+            }
+            if (status == CpSolverStatus.Optimal || status == CpSolverStatus.Feasible)
+                return getResults(solver);
+            else return null;
+        }
         public List<List<(int, int)>>? objectiveOptimize()
         {
             setSolverCount();
@@ -359,6 +348,7 @@ namespace ATTAS_CORE
             solver = new CpSolver();
             status = new CpSolverStatus();
             solver.StringParameters += "linearization_level:0 " + $"max_time_in_seconds:{maxSearchingTimeOption} ";
+            #region Add Objective To Model
             List<LinearExpr> totalDeltas = new List<LinearExpr>();
             // O-01 MINIMIZE DAY ( numInstructors * numDays )
             if (objOption[0] > 0)
@@ -486,9 +476,9 @@ namespace ATTAS_CORE
                         foreach (int n in allTasks)
                             if (taskSubjectMapping[n] == s)
                                 literals.Add(assigns[(n, i)]);
+                        instructorSubjectStatus.Add((i, s), model.NewBoolVar($"i{i}s{s}"));
                         if (literals.Count() == 0)
                             model.AddHint(instructorSubjectStatus[(i, s)], 0);
-                        instructorSubjectStatus.Add((i, s), model.NewBoolVar($"i{i}s{s}"));
                         model.Add(LinearExpr.Sum(literals) > 0).OnlyEnforceIf(instructorSubjectStatus[(i, s)]);
                         model.Add(LinearExpr.Sum(literals) == 0).OnlyEnforceIf(instructorSubjectStatus[(i, s)].Not());
                         literals.Clear();
@@ -612,7 +602,7 @@ namespace ATTAS_CORE
                         break;
                 }
             }
-
+            #endregion
             // SOLVING
             switch (strategyOption)
             {
@@ -631,11 +621,27 @@ namespace ATTAS_CORE
                 return getResults(solver);
             else return null;
         }
-        /*
-        ################################
-        ||          Utility           ||
-        ################################
-        */
+        public List<List<(int, int)>>? solve()
+        {
+            if (numBackupInstructors < 0)
+            {
+                if (debugLoggerOption)
+                {
+                    Console.WriteLine("ATTAS - Finding Optimal Backup Quota");
+                }
+                numBackupInstructors = findBackupInstructor();
+                if (debugLoggerOption)
+                {
+                    Console.WriteLine($"Backup Quota = {numBackupInstructors}");
+                }
+            }
+            if (objOption.Sum() == 0)
+                return constraintOnly();
+            else
+                return objectiveOptimize();
+        }
+        #endregion
+        #region Utility
         public object[] getStatistic()
         {
             return new object[] { solver.ObjectiveValue,status.ToString(), solver.NumConflicts(), solver.NumBranches(), solver.WallTime() };
@@ -665,7 +671,7 @@ namespace ATTAS_CORE
         }
         public List<List<(int, int)>> getResults(CpSolver solver)
         {
-            List<(int,int)> result = new List<(int,int)> ();
+            List<(int, int)> result = new List<(int, int)>();
             foreach (int n in allTasks)
             {
                 bool isAssigned = false;
@@ -682,42 +688,9 @@ namespace ATTAS_CORE
                     result.Add((n, -1));
                 }
             }
-            List<List<(int, int)>> results = new List<List<(int, int)>>{result};
+            List<List<(int, int)>> results = new List<List<(int, int)>> { result };
             return results;
         }
-        public List<List<(int, int)>>? solve()
-        {
-            if (numBackupInstructors == -1)
-            {
-                if (debugLoggerOption)
-                {
-                    Console.WriteLine("ATTAS - Finding Optimal Backup Quota");
-                }
-                numBackupInstructors = findBackupInstructor();
-                if (debugLoggerOption)
-                {
-                    Console.WriteLine($"Backup Quota = {numBackupInstructors}");
-                }
-            }
-            if (objOption.Sum() == 0)
-                return constraintOnly();
-            else
-                return objectiveOptimize();
-        }
+        #endregion  
     }
-    /*
-    ################################
-    ||        END OR-TOOLS        ||
-    ################################
-    */
 }
-/*  Solver
-    *  1: OR-TOOLS  ( 1,2,3 )
-    *  2: CPLEX ( 1 , 2 , 3 )
-    *  3: NGSA-II ( 4 )
-    *  Strategy
-    *  1: Scalazation
-    *  2: Constraint Programming
-    *  3: Compromise Programming
-    *  4: Pareto-based
-*/

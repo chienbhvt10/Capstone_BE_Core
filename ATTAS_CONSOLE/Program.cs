@@ -3,183 +3,44 @@ using Spectre.Console;
 using System.Runtime.InteropServices;
 using Microsoft.Office.Interop.Excel;
 using Range = Microsoft.Office.Interop.Excel.Range;
+using System.Configuration;
 
 string inputExcelFilePath = @"D:\FPT\SEP490_G14\ATTAS_ORTOOLS\inputs\inputCF_SU23_NEW.xlsx";
 string outputExcelFolderPath = @"D:\FPT\SEP490_G14\ATTAS_ORTOOLS\results";
 
 ATTAS_ORTOOLS attas = new ATTAS_ORTOOLS();
 
-int[] objOption = new int[8] { 0, 0, 0, 0, 0, 0, 0, 1 };
-int[] objWeight = new int[8] { 60, 25, 1, 1, 1, 1, 1, 1 };
-double maxSearchingTimeOption = 300.0;
-int strategyOption = 2;
-
 string[] classNames = Array.Empty<string>();
 string[] slotNames = Array.Empty<string>();
 string[] instructorNames = Array.Empty<string>();
 string[] subjectNames = Array.Empty<string>();
 
-AnsiConsole.Write(new FigletText("ATTAS").LeftJustified().Color(Color.Gold1));
+attas.objOption = ConfigurationManager.AppSettings["objOption"].Split(',').Select(int.Parse).ToArray();
+attas.objWeight = ConfigurationManager.AppSettings["objWeight"].Split(',').Select(int.Parse).ToArray();
+attas.maxSearchingTimeOption = double.Parse(ConfigurationManager.AppSettings["time"]);
+attas.strategyOption = int.Parse(ConfigurationManager.AppSettings["strategy"]);
 
-string choice;
 bool read = false;
 List<List<(int, int)>>? results = null;
-do
-{
-    choice = AnsiConsole.Prompt(
-        new SelectionPrompt<string>()
-            .Title("[underline orange1]Option[/]")
-            .PageSize(10)
-            .MoreChoicesText("[grey](Move up and down to select option)[/]")
-            .AddChoices(new[] {
-            "Import", "Solve", "Export","Setting","Quit"
-            }));
-    switch(choice)
-    {
-        case "Import":
-            read = readInputExcel(inputExcelFilePath, attas, ref classNames, ref slotNames, ref instructorNames, ref subjectNames);
-            cleanCOM();
-            break;
-        case "Solve":
-            var rule = new Rule("Solve");
-            rule.LeftJustified();
-            AnsiConsole.Write(rule);
-            if (read)
-            {
-                addSetting(ref attas,ref objOption,ref objWeight,ref maxSearchingTimeOption,ref strategyOption);
-                results = solve(attas);
-            }
-            else
-            {
-                AnsiConsole.Markup("\n[red]No input to solve[/]\n\n");
-            }
-            break;
-        case "Setting":
-            string settingChoice="Back";
-            do
-            {
-                var settingRule = new Rule("Setting");
-                settingRule.LeftJustified();
-                AnsiConsole.Write(settingRule);
-                AnsiConsole.Markup($"\n Input path: [underline green]{inputExcelFilePath}[/]\n");
-                AnsiConsole.Markup($"\n Output path: [underline green]{outputExcelFolderPath}[/]\n");
-                var table = new Table();
-                string[] objName = new string[] { "Teaching Day", "Teaching Time", "Pattern Cost", "Subject Diversity", "Quota Available" , "Walking Distance" , "Subject Preference", "Slot Preference" };
-                // Add some columns
-                table.AddColumn("");
-                for (int i = 0; i < objName.Length; i++)
-                {
-                    table.AddColumn(objName[i]);
-                }
-                // Add Row
-                table.AddRow("Status", $"{objOption[0]}", $"{objOption[1]}", $"{objOption[2]}", $"{objOption[3]}", $"{objOption[4]}", $"{objOption[5]}", $"{objOption[6]}", $"{objOption[7]}");
-                table.AddRow("Weight", $"{objWeight[0]}", $"{objWeight[1]}", $"{objWeight[2]}", $"{objWeight[3]}", $"{objWeight[4]}", $"{objWeight[5]}", $"{objWeight[6]}", $"{objWeight[7]}");
-                AnsiConsole.Write(table);
-                AnsiConsole.Markup($"\n Max Solving Time: [underline green]{maxSearchingTimeOption}[/]\n");
-                AnsiConsole.Markup($"\n Strategy: [underline green]{strategyOption}[/]\n\n");
-                settingChoice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[underline orange1]Setting[/]")
-                    .PageSize(10)
-                    .MoreChoicesText("[grey](Move up and down to select option)[/]")
-                    .AddChoices(new[] {
-                    "Input path","Output path","Objective Option","Objective Weight","Max Solving Time","Strategy","Back"
-                }));
-                
-                switch (settingChoice)
-                {
-                    case "Input path":
-                        string inputPath = AnsiConsole.Prompt(
-                        new TextPrompt<string>("New input path:")
-                            .AllowEmpty());
-                        if (inputPath != "")
-                        {
-                            inputExcelFilePath= inputPath;
-                        }
-                        break;
-                    case "Output path":
-                        string outputPath = AnsiConsole.Prompt(
-                        new TextPrompt<string>("New output path:")
-                            .AllowEmpty());
-                        if (outputPath != "")
-                        {
-                            outputExcelFolderPath = outputPath;
-                        }
-                        break;
-                    case "Objective Option":
-                        for (int i = 0; i < objName.Length; i++)
-                        {
-                            objOption[i] = Convert.ToInt32(AnsiConsole.Confirm($"Use {objName[i]}?",false));
-                        }
-                        break;
-                    case "Objective Weight":
-                        for (int i = 0; i < objName.Length; i++)
-                        {
-                            objWeight[i] = AnsiConsole.Prompt(
-                            new TextPrompt<int>($"Objective {objName[i]} weight?:")
-                                .PromptStyle("green")
-                                .ValidationErrorMessage("[red]That's not a valid weight[/]")
-                                .Validate(time =>
-                                {
-                                    return time switch
-                                    {
-                                        < 0 => ValidationResult.Error("[red]Weight must be equal or above 0[/]"),
-                                        _ => ValidationResult.Success(),
-                                    };
-                                }));
-                        }
-                        break;
-                    case "Max Solving Time":
-                        maxSearchingTimeOption = AnsiConsole.Prompt(
-                            new TextPrompt<int>("Max solving time:")
-                                .PromptStyle("green")
-                                .ValidationErrorMessage("[red]That's not a valid time[/]")
-                                .Validate(time =>
-                                {
-                                    return time switch
-                                    {
-                                        <= 0 => ValidationResult.Error("[red]Time must be above 0[/]"),
-                                        _ => ValidationResult.Success(),
-                                    };
-                                }));
-                        break;
-                    case "Strategy":
-                        strategyOption = AnsiConsole.Prompt(
-                            new TextPrompt<int>("Strategy ( 1 - Weighted Sum 2 - Constraint Programming 3 - Compromise Programming ) :")
-                                .PromptStyle("green")
-                                .ValidationErrorMessage("[red]That's not a valid time[/]")
-                                .Validate(strategy =>
-                                {
-                                    return strategy switch
-                                    {
-                                        <= 0 => ValidationResult.Error("[red]Strategy must be in range 1-3[/]"),
-                                        > 3 => ValidationResult.Error("[red]Strategy must be in range 1-3[/]"),
-                                        _ => ValidationResult.Success(),
-                                    };
-                                }));
-                        break;
 
-                }
-            }
-            while (settingChoice != "Back");
-            break;
-        case "Export":
-            writeOutputExcel(outputExcelFolderPath, attas, results,classNames,slotNames,instructorNames,subjectNames);
-            cleanCOM();
-            break;
-    }
+string inputPath = AnsiConsole.Prompt(new TextPrompt<string>(" Input file path: "));
+string outputPath = AnsiConsole.Prompt(new TextPrompt<string>(" Output path: "));
+
+read = readInputExcel(inputExcelFilePath, attas, ref classNames, ref slotNames, ref instructorNames, ref subjectNames);
+cleanCOM();
+if (read)
+{
+    results = solve(attas);
+    writeOutputExcel(outputExcelFolderPath, attas, results, classNames, slotNames, instructorNames, subjectNames);
+    cleanCOM();
 }
-while (choice != "Quit");
 static bool readInputExcel(string inputPath,ATTAS_ORTOOLS attas,ref string[] classNames,ref string[] slotNames,ref string[] instructorNames,ref string[] subjectNames)
 {
     Application? oXL = null;
     Workbook? oWB = null;
     try
     {
-        var rule = new Rule("Import");
-        rule.LeftJustified();
-        AnsiConsole.Write(rule);
-        AnsiConsole.Markup($"\n Reading Data From [underline green]{inputPath}[/]\n\n");
+        AnsiConsole.Markup($"\nImport Data From [underline green]{inputPath}[/]\n\n");
         oXL = new Application();
         oWB = oXL.Workbooks.Open(inputPath);
         Worksheet oWS_inputInfo = oWB.Sheets[1];
@@ -266,20 +127,13 @@ static bool readInputExcel(string inputPath,ATTAS_ORTOOLS attas,ref string[] cla
     }
     catch (Exception ex)
     {
-        AnsiConsole.Markup($"[red]{ex.Message}[/]\n\n");
+        AnsiConsole.Markup($"[red]{ex.Message}[/]\n");
         if ( oWB != null ) 
             oWB.Close();
         if ( oXL != null ) 
             oXL.Quit();
         return false;
     }
-}
-static void addSetting(ref ATTAS_ORTOOLS attas,ref int[] objOption,ref int[] objWeight,ref double maxSearchingTimeOption,ref int strategyOption)
-{
-    attas.objOption = objOption;
-    attas.objWeight = objWeight;
-    attas.maxSearchingTimeOption = maxSearchingTimeOption;
-    attas.strategyOption = strategyOption;
 }
 static List<List<(int, int)>>? solve(ATTAS_ORTOOLS attas)
 {
@@ -325,9 +179,6 @@ static List<List<(int, int)>>? solve(ATTAS_ORTOOLS attas)
 }
 static void writeOutputExcel(string outputPath,ATTAS_ORTOOLS attas, List<List<(int, int)>>? results,string[] classNames,string[] slotNames,string[] instructorNames,string[] subjectNames) 
 {
-    var line = new Rule("Export");
-    line.LeftJustified();
-    AnsiConsole.Write(line);
     if (results != null)
     {
         Application? oXL = null;
@@ -337,86 +188,107 @@ static void writeOutputExcel(string outputPath,ATTAS_ORTOOLS attas, List<List<(i
             string[] statisticColumn = new string[] { "Quota ","Teaching Day","Teaching Time","Waiting Time","Subject Diversity","Quota Available","Walking Distance", "Subject Preference","Slot Preference"};
             DateTime currentTime = DateTime.Now;
             string currentTimeString = currentTime.ToString("yyyy-MM-ddTHH-mm-ss");
-            AnsiConsole.Markup($"\n Start Export Result Into [underline green]{outputPath}\\result_{currentTimeString}.xlsx[/]\n\n");
+            AnsiConsole.Markup($"\nExport Result into [underline green]{outputPath}\\result_{currentTimeString}.xlsx[/]\n\n");
             List<(int, int)> tmp = results[0];
             oXL = new Application();
             oWB = oXL.Workbooks.Add();
-            // STATISTIC
+
+            int[] dataQuota = new int[attas.numInstructors];
+            int[] dataDayEfficiency = new int[attas.numInstructors];
+            int[] dataTimeEfficiency = new int[attas.numInstructors];
+            int[] dataWaitingTime = new int[attas.numInstructors];
+            int[] dataSubjectDiversity = new int[attas.numInstructors];
+            int[] dataQuotaAvailable = new int[attas.numInstructors];
+            int[] dataWalkingDistance = new int[attas.numInstructors];
+            int[] dataSubjectPreference = new int[attas.numInstructors];
+            int[] dataSlotPreference = new int[attas.numInstructors];
+
+            bool[] flag = new bool[attas.numTasks];
+            #region Statistic
             Worksheet oWS = oWB.ActiveSheet;
-            AnsiConsole.Markup("[underline]Statistic Sheet[/]\n");
-            AnsiConsole.Progress()
-            .Start(ctx =>
+            oWS.Name = "Statistic";
+            for (int i = 0; i < attas.numInstructors; i++)
             {
-                oWS.Name = "Statistic";
-                // Define tasks
-                var taskWriteInstructorName = ctx.AddTask("Write Instructor Name");
-                var taskWriteStatisticName = ctx.AddTask("Write Statistic Name");
-                var taskApplyFullBorder = ctx.AddTask("Apply Border");
-                var taskCalculateStatistic = ctx.AddTask("Calculate Statistic");
-                for (int i = 0; i < attas.numInstructors; i++)
+                oWS.Cells[i + 2, 1] = instructorNames[i];
+                oWS.Cells[i + 2, 1].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.DarkOrange);
+                alignMiddle(oWS.Cells[i + 2, 1]);
+            }
+            for (int i = 0; i < statisticColumn.Length; i++)
+            {
+                oWS.Cells[1, i + 2] = statisticColumn[i];
+                oWS.Cells[1, i + 2].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.SteelBlue);
+                alignMiddle(oWS.Cells[1, i + 2]);
+            }
+            for (int i = 0; i <= attas.numInstructors; i++)
+                for (int j = 0; j <= statisticColumn.Length; j++)
                 {
-                    oWS.Cells[i + 2, 1] = instructorNames[i];
-                    oWS.Cells[i + 2, 1].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.DarkOrange);
-                    alignMiddle(oWS.Cells[i + 2, 1]);
-                    taskWriteInstructorName.Increment(100.0 / (1.0* attas.numInstructors));
+                    fullBorder(oWS.Cells[i + 1, j + 1]);
                 }
-                taskWriteInstructorName.Value = 100;
-                for (int i = 0; i < statisticColumn.Length; i++)
+            var sorted = tmp.OrderBy(t => t.Item2);
+            int currentId = -1;
+            int objQuota = 0;
+            int[] objDay = new int[attas.numDays];
+            int[,] objTime = new int[attas.numDays, attas.numTimes];
+            int objWaiting = 0;
+            int[] objSubjectDiversity = new int[attas.numSubjects];
+            int objQuotaAvailable = 0;
+            int objWalkingDistance = 0;
+            int objSubjectPreference = 0;
+            int objSlotPreference = 0;
+            List<int> tasks = new List<int>();
+            foreach (var item in sorted)
+            {
+                if (currentId != item.Item2)
                 {
-                    oWS.Cells[1, i + 2] = statisticColumn[i];
-                    oWS.Cells[1, i + 2].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.SteelBlue);
-                    alignMiddle(oWS.Cells[1, i + 2]);
-                    taskWriteStatisticName.Increment(100.0 / (1.0 * statisticColumn.Length));
-                }
-                taskWriteStatisticName.Value = 100;
-                for (int i = 0; i <= attas.numInstructors; i++)
-                    for (int j = 0; j <= statisticColumn.Length; j++)
+                    if (currentId != -1)
                     {
-                        fullBorder(oWS.Cells[i + 1, j + 1]);
-                        taskApplyFullBorder.Increment(100.0 / (1.0 * attas.numInstructors * statisticColumn.Length));
-                    }
-                taskApplyFullBorder.Value = 100;
-                var sorted = tmp.OrderBy(t => t.Item2);
-                int currentId = -1;
-                int objQuota = 0;
-                int[] objDay = new int[attas.numDays];
-                int[,] objTime = new int[attas.numDays, attas.numTimes];
-                int objWaiting = 0;
-                int[] objSubjectDiversity = new int[attas.numSubjects];
-                int objQuotaAvailable = 0;
-                int objWalkingDistance = 0;
-                int objSubjectPreference = 0;
-                int objSlotPreference = 0;
-                List<int> tasks = new List<int>();
-                foreach (var item in sorted)
-                {
-                    if (currentId != item.Item2)
-                    {
-                        if (currentId != -1)
+                        oWS.Cells[currentId + 2, 2] = objQuota;
+                        oWS.Cells[currentId + 2, 3] = objDay.Sum();
+                        oWS.Cells[currentId + 2, 4] = flattenArray(objTime).Sum();
+                        oWS.Cells[currentId + 2, 5] = calObjWaitingTime(tasks, attas); 
+                        oWS.Cells[currentId + 2, 6] = objSubjectDiversity.Sum();
+                        oWS.Cells[currentId + 2, 7] = attas.instructorQuota[currentId] - objQuota;
+                        oWS.Cells[currentId + 2, 8] = calObjWalkingDistance(tasks, attas);
+                        oWS.Cells[currentId + 2, 9] = objSubjectPreference;
+                        oWS.Cells[currentId + 2, 10] = objSlotPreference;
+
+                        dataQuota[currentId] = objQuota;
+                        dataWaitingTime[currentId] = calObjWaitingTime(tasks, attas);
+                        dataSubjectDiversity[currentId] = objSubjectDiversity.Sum();
+                        dataQuotaAvailable[currentId] = attas.instructorQuota[currentId] - objQuota;
+                        dataWalkingDistance[currentId] = calObjWalkingDistance(tasks, attas);
+                        if (objQuota != 0)
                         {
-                            oWS.Cells[currentId + 2, 2] = objQuota;
-                            oWS.Cells[currentId + 2, 3] = objDay.Sum();
-                            oWS.Cells[currentId + 2, 4] = flattenArray(objTime).Sum();
-                            oWS.Cells[currentId + 2, 5] = calObjWaitingTime(tasks, attas); 
-                            oWS.Cells[currentId + 2, 6] = objSubjectDiversity.Sum();
-                            oWS.Cells[currentId + 2, 7] = attas.instructorQuota[currentId] - objQuota;
-                            oWS.Cells[currentId + 2, 8] = calObjWalkingDistance(tasks, attas);
-                            oWS.Cells[currentId + 2, 9] = objSubjectPreference;
-                            oWS.Cells[currentId + 2, 10] = objSlotPreference;
+                            dataDayEfficiency[currentId] = (int)  (100.0*objQuota / (objDay.Sum()*2.0));
+                            dataTimeEfficiency[currentId] = (int) (100.0*objQuota / flattenArray(objTime).Sum());
+                            dataSubjectPreference[currentId] =(int) (100.0*objSubjectPreference / objQuota);
+                            dataSlotPreference[currentId] =(int) (100.0*objSlotPreference/ objQuota);
                         }
-                        //reset
-                        objQuota = 0;
-                        Array.Clear(objDay, 0, objDay.Length);
-                        Array.Clear(objTime, 0, objTime.Length);
-                        objWaiting = 0;
-                        Array.Clear(objSubjectDiversity, 0, objSubjectDiversity.Length);
-                        objQuotaAvailable = 0;
-                        objWalkingDistance = 0;
-                        objSubjectPreference = 0;
-                        objSlotPreference = 0;
-                        tasks.Clear();
-                        currentId = item.Item2;
+                        else
+                        {
+                            dataDayEfficiency[currentId] = 100;
+                            dataTimeEfficiency[currentId] = 100;
+                            dataSubjectPreference[currentId] = 500;
+                            dataSlotPreference[currentId] = 500;
+                        }
+                            
+
                     }
+                    //reset
+                    objQuota = 0;
+                    Array.Clear(objDay, 0, objDay.Length);
+                    Array.Clear(objTime, 0, objTime.Length);
+                    objWaiting = 0;
+                    Array.Clear(objSubjectDiversity, 0, objSubjectDiversity.Length);
+                    objQuotaAvailable = 0;
+                    objWalkingDistance = 0;
+                    objSubjectPreference = 0;
+                    objSlotPreference = 0;
+                    tasks.Clear();
+                    currentId = item.Item2;
+                }
+                if ( currentId != -1)
+                {             
                     tasks.Add(item.Item1);
                     int thisTaskSlot = attas.taskSlotMapping[item.Item1];
                     int thisTaskSubject = attas.taskSubjectMapping[item.Item1];
@@ -436,169 +308,193 @@ static void writeOutputExcel(string outputPath,ATTAS_ORTOOLS attas, List<List<(i
                     objSubjectDiversity[thisTaskSubject] = 1;
                     objSubjectPreference += attas.instructorSubjectPreference[item.Item2, thisTaskSubject];
                     objSlotPreference += attas.instructorSlotPreference[item.Item2, thisTaskSlot];
-                    taskCalculateStatistic.Increment(100.0 / (1.0 * attas.numTasks));
                 }
-                if (currentId != -1)
-                {
-                    oWS.Cells[currentId + 2, 2] = objQuota;
-                    oWS.Cells[currentId + 2, 3] = objDay.Sum();
-                    oWS.Cells[currentId + 2, 4] = flattenArray(objTime).Sum();
-                    oWS.Cells[currentId + 2, 5] = calObjWaitingTime(tasks, attas);
-                    oWS.Cells[currentId + 2, 6] = objSubjectDiversity.Sum();
-                    oWS.Cells[currentId + 2, 7] = attas.instructorQuota[currentId] - objQuota;
-                    oWS.Cells[currentId + 2, 8] = calObjWalkingDistance(tasks, attas);
-                    oWS.Cells[currentId + 2, 9] = objSubjectPreference;
-                    oWS.Cells[currentId + 2, 10] = objSlotPreference;
-                }
-                foreach(int i in attas.allInstructors)
-                {
-                    if(oWS.Cells[i + 2, 2].Value == null)
-                    {
-                        oWS.Cells[i + 2, 2] = 0;
-                        oWS.Cells[i + 2, 3] = 0;
-                        oWS.Cells[i + 2, 4] = 0;
-                        oWS.Cells[i + 2, 5] = 0;
-                        oWS.Cells[i + 2, 6] = 0;
-                        oWS.Cells[i + 2, 7] = attas.instructorQuota[i];
-                        oWS.Cells[i + 2, 8] = 0;
-                        oWS.Cells[i + 2, 9] = 0;
-                        oWS.Cells[i + 2, 10] = 0;
-                    }
-                }
-                taskCalculateStatistic.Value = 100;
-                oWS.Columns.AutoFit();
-            });
-            // RESULT
-            AnsiConsole.Markup("[underline]Result Sheet[/]\n");
-            AnsiConsole.Progress()
-            .Start(ctx =>
+            }
+            if (currentId != -1)
             {
-                oWS = oWB.Sheets.Add();
-                oWS.Name = "Result";
-                // Define tasks
-                var taskWriteInstructorName = ctx.AddTask("Write Instructor Name");
-                var taskWriteSlotName = ctx.AddTask("Write Slot Name");
-                var taskApplyBorder = ctx.AddTask("Apply Border");
-                var taskWriteResult = ctx.AddTask("Write Result");
+                oWS.Cells[currentId + 2, 2] = objQuota;
+                oWS.Cells[currentId + 2, 3] = objDay.Sum();
+                oWS.Cells[currentId + 2, 4] = flattenArray(objTime).Sum();
+                oWS.Cells[currentId + 2, 5] = calObjWaitingTime(tasks, attas);
+                oWS.Cells[currentId + 2, 6] = objSubjectDiversity.Sum();
+                oWS.Cells[currentId + 2, 7] = attas.instructorQuota[currentId] - objQuota;
+                oWS.Cells[currentId + 2, 8] = calObjWalkingDistance(tasks, attas);
+                oWS.Cells[currentId + 2, 9] = objSubjectPreference;
+                oWS.Cells[currentId + 2, 10] = objSlotPreference;
 
-                var taskSubjectWriteSlotName = ctx.AddTask("Write Slot Name");
-                var taskSubjectWriteSubjectList = ctx.AddTask("Write Subject List");
-                var taskSubjectApplyBorder = ctx.AddTask("Apply Border");
-                for (int i = 0; i < attas.numInstructors; i++)
+
+                dataQuota[currentId] = objQuota;
+                dataWaitingTime[currentId] = calObjWaitingTime(tasks, attas);
+                dataSubjectDiversity[currentId] = objSubjectDiversity.Sum();
+                dataQuotaAvailable[currentId] = attas.instructorQuota[currentId] - objQuota;
+                dataWalkingDistance[currentId] = calObjWalkingDistance(tasks, attas);
+                if (objQuota != 0)
                 {
-                    oWS.Cells[i + 2, 1] = instructorNames[i];
-                    oWS.Cells[i + 2, 1].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.DarkOrange);
-                    alignMiddle(oWS.Cells[i + 2, 1]);
-                    taskWriteInstructorName.Increment(100.0 / (1.0 * (attas.numInstructors+1)));
+                    dataDayEfficiency[currentId] = (int)(100.0 * objQuota / (objDay.Sum() * 2.0));
+                    dataTimeEfficiency[currentId] = (int)(100.0 * objQuota / flattenArray(objTime).Sum());
+                    dataSubjectPreference[currentId] = (int)(100.0 * objSubjectPreference / objQuota);
+                    dataSlotPreference[currentId] = (int)(100.0 * objSlotPreference / objQuota);
                 }
-                oWS.Cells[attas.numInstructors + 2, 1] = "UNASSIGNED";
-                oWS.Cells[attas.numInstructors + 2, 1].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.DarkOrange);
-                alignMiddle(oWS.Cells[attas.numInstructors + 2, 1]);
-                taskWriteInstructorName.Increment(100.0 / (1.0 * (attas.numInstructors + 1)));
-                taskWriteInstructorName.Value = 100;
-                for (int i = 0; i < attas.numSlots; i++)
+                else
                 {
-                    oWS.Cells[1, i + 2] = slotNames[i];
-                    oWS.Cells[1, i + 2].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.SteelBlue);
-                    alignMiddle(oWS.Cells[1, i + 2]);
-                    taskWriteSlotName.Increment(100.0 / (1.0 * (attas.numSlots)));
+                    dataDayEfficiency[currentId] = 100;
+                    dataTimeEfficiency[currentId] = 100;
+                    dataSubjectPreference[currentId] = 500;
+                    dataSlotPreference[currentId] = 500;
                 }
-                taskWriteSlotName.Value = 100;
-                for (int i = 0; i <= attas.numInstructors + 1; i++)
-                    for (int j = 0; j <= attas.numSlots; j++)
-                    {
-                        fullBorder(oWS.Cells[i + 1, j + 1]);
-                        taskApplyBorder.Increment(100.0 / (1.0 * (attas.numSlots + 1) * (attas.numInstructors+2)) );
-                    }
-                taskApplyBorder.Value= 100;
-                foreach ((int, int) result in tmp)
+
+            }
+            foreach(int i in attas.allInstructors)
+            {
+                if(oWS.Cells[i + 2, 2].Value == null)
                 {
-                    if (result.Item2 >= 0)
+                    oWS.Cells[i + 2, 2] = 0;
+                    oWS.Cells[i + 2, 3] = 0;
+                    oWS.Cells[i + 2, 4] = 0;
+                    oWS.Cells[i + 2, 5] = 0;
+                    oWS.Cells[i + 2, 6] = 0;
+                    oWS.Cells[i + 2, 7] = attas.instructorQuota[i];
+                    oWS.Cells[i + 2, 8] = 0;
+                    oWS.Cells[i + 2, 9] = 0;
+                    oWS.Cells[i + 2, 10] = 0;
+
+
+                    dataQuota[i] = 0;
+                    dataWaitingTime[i] = 0;
+                    dataSubjectDiversity[i] = 0;
+                    dataQuotaAvailable[i] = attas.instructorQuota[i];
+                    dataWalkingDistance[i] = 0;
+                    dataDayEfficiency[i] = 100;
+                    dataTimeEfficiency[i] = 100;
+                    dataSubjectPreference[i] = 500;
+                    dataSlotPreference[i] = 500;
+                    
+                }
+            }
+            oWS.Columns.AutoFit();
+            #endregion
+            #region Chart
+            oWS = oWB.Sheets.Add();
+            oWS.Name = "Statistic Chart";
+            ChartObjects charts = oWS.ChartObjects();
+            int[] distinctvalues = dataQuota.Distinct().OrderBy(x => x).ToArray();
+            int[] distinctcount = dataQuota.FindAllIndexof(distinctvalues).ToArray();
+            drawChart(oWS, charts, "Working Quota","Statistic", "Quota", "Count", dataQuota, 0,false);
+            drawChart(oWS, charts, "Day Efficiency","Statistic", "Score", "Count", dataDayEfficiency, 1,true);
+            drawChart(oWS, charts, "Time Efficiency", "Statistic", "Score", "Count", dataTimeEfficiency, 2, true);
+            drawChart(oWS, charts, "Waiting Time", "Statistic", "Time", "Count", dataWaitingTime, 3, false);
+            drawChart(oWS, charts, "Subject Diversity", "Statistic", "Subject", "Count", dataSubjectDiversity, 4, false);
+            drawChart(oWS, charts, "Quota Available", "Statistic", "Quota", "Count", dataQuotaAvailable, 5, false);
+            drawChart(oWS, charts, "Walking Distance", "Statistic", "Distance", "Count", dataWalkingDistance, 6, false);
+            drawChart(oWS, charts, "Subject Preference", "Statistic", "Score", "Count", dataSubjectPreference, 7, true);
+            drawChart(oWS, charts, "Slot Preference", "Statistic", "Score", "Count", dataSlotPreference, 8, true);
+            #endregion
+            #region Result
+            oWS = oWB.Sheets.Add();
+            oWS.Name = "Result";
+
+            for (int i = 0; i < attas.numInstructors; i++)
+            {
+                oWS.Cells[i + 2, 1] = instructorNames[i];
+                oWS.Cells[i + 2, 1].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.DarkOrange);
+                alignMiddle(oWS.Cells[i + 2, 1]);
+            }
+            oWS.Cells[attas.numInstructors + 2, 1] = "UNASSIGNED";
+            oWS.Cells[attas.numInstructors + 2, 1].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.OrangeRed);
+            alignMiddle(oWS.Cells[attas.numInstructors + 2, 1]);
+            for (int i = 0; i < attas.numSlots; i++)
+            {
+                oWS.Cells[1, i + 2] = slotNames[i];
+                oWS.Cells[1, i + 2].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.SteelBlue);
+                alignMiddle(oWS.Cells[1, i + 2]);
+            }
+            for (int i = 0; i <= attas.numInstructors + 1; i++)
+                for (int j = 0; j <= attas.numSlots; j++)
+                {
+                    fullBorder(oWS.Cells[i + 1, j + 1]);
+                }
+            foreach ((int, int) result in tmp)
+            {
+                if (result.Item2 >= 0)
+                {
+                    flag[result.Item1] = true; 
+                    oWS.Cells[result.Item2 + 2, attas.taskSlotMapping[result.Item1] + 2] = $"{result.Item1 + 1}.{classNames[result.Item1]}.{subjectNames[attas.taskSubjectMapping[result.Item1]]}";
+                    oWS.Cells[result.Item2 + 2, attas.taskSlotMapping[result.Item1] + 2].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.AntiqueWhite);
+                }
+                else
+                {
+                    flag[result.Item1] = false;
+                    oWS.Cells[attas.numInstructors + 2, attas.taskSlotMapping[result.Item1] + 2] = oWS.Cells[attas.numInstructors + 2, attas.taskSlotMapping[result.Item1] + 2].Value + $"{result.Item1 + 1}.{classNames[result.Item1]}.{subjectNames[attas.taskSubjectMapping[result.Item1]]}\n";
+                    oWS.Cells[attas.numInstructors + 2, attas.taskSlotMapping[result.Item1] + 2].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.Red);
+                }
+            }
+            #endregion
+            #region Subject
+            //SUBJECT
+            int startSubjectTable = attas.numInstructors + 5;
+            int row = 1;
+            List<int>[,] subjects = new List<int>[attas.numSubjects, attas.numSlots];
+            foreach (int i in attas.allSubjects)
+                foreach (int j in attas.allSlots)
+                    subjects[i, j] = new List<int>();
+            int[] subjectSlotCount = new int[attas.numSubjects];
+            foreach(int n in attas.allTasks)
+            {
+                subjects[attas.taskSubjectMapping[n], attas.taskSlotMapping[n]].Add(n);
+                subjectSlotCount[attas.taskSubjectMapping[n]] = Math.Max(subjectSlotCount[attas.taskSubjectMapping[n]], subjects[attas.taskSubjectMapping[n], attas.taskSlotMapping[n]].Count());
+            }
+
+            for (int i = 0; i < attas.numSlots; i++)
+            {
+                oWS.Cells[startSubjectTable + 1, i + 2] = slotNames[i];
+                oWS.Cells[startSubjectTable + 1, i + 2].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.SteelBlue);
+                alignMiddle(oWS.Cells[startSubjectTable + 1, i + 2]);
+            }
+            row++;
+            for (int i = 0; i < attas.numSubjects; i++)
+            {    
+                for(int j=0; j < subjectSlotCount[i];j++)
+                {      
+                    oWS.Cells[startSubjectTable + row, 1] = subjectNames[i];
+                    if (i % 2 == 0)
                     {
-                        oWS.Cells[result.Item2 + 2, attas.taskSlotMapping[result.Item1] + 2] = $"{result.Item1 + 1}.{classNames[result.Item1]}.{subjectNames[attas.taskSubjectMapping[result.Item1]]}";
-                        oWS.Cells[result.Item2 + 2, attas.taskSlotMapping[result.Item1] + 2].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.AntiqueWhite);
+                        oWS.Cells[startSubjectTable + row, 1].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.DarkOrange);
                     }
                     else
                     {
-                        oWS.Cells[attas.numInstructors + 2, attas.taskSlotMapping[result.Item1] + 2] = oWS.Cells[attas.numInstructors + 2, attas.taskSlotMapping[result.Item1] + 2].Value + $"{result.Item1 + 1}.{classNames[result.Item1]}.{subjectNames[attas.taskSubjectMapping[result.Item1]]}\n";
+                        oWS.Cells[startSubjectTable + row, 1].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.LightSalmon);
                     }
-                    taskWriteResult.Increment(100.0 / (1.0 * attas.numTasks)); 
-                }
-                taskWriteResult.Value= 100;
-
-
-                //SUBJECT
-                int startSubjectTable = attas.numInstructors + 5;
-                int row = 1;
-                List<int>[,] subjects = new List<int>[attas.numSubjects, attas.numSlots];
-                foreach (int i in attas.allSubjects)
-                    foreach (int j in attas.allSlots)
-                        subjects[i, j] = new List<int>();
-                int[] subjectSlotCount = new int[attas.numSubjects];
-                foreach(int n in attas.allTasks)
-                {
-                    subjects[attas.taskSubjectMapping[n], attas.taskSlotMapping[n]].Add(n);
-                    subjectSlotCount[attas.taskSubjectMapping[n]] = Math.Max(subjectSlotCount[attas.taskSubjectMapping[n]], subjects[attas.taskSubjectMapping[n], attas.taskSlotMapping[n]].Count());
-                }
-
-                for (int i = 0; i < attas.numSlots; i++)
-                {
-                    oWS.Cells[startSubjectTable + 1, i + 2] = slotNames[i];
-                    oWS.Cells[startSubjectTable + 1, i + 2].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.SteelBlue);
-                    alignMiddle(oWS.Cells[startSubjectTable + 1, i + 2]);
-                    taskSubjectWriteSlotName.Increment(100.0 / (1.0 * attas.numSlots));
-                }
-                taskSubjectWriteSlotName.Value = 100;
-                row++;
-                for (int i = 0; i < attas.numSubjects; i++)
-                {
-                   
-                   for(int j=0; j < subjectSlotCount[i];j++)
-                   {
-                       
-                        oWS.Cells[startSubjectTable + row, 1] = subjectNames[i];
-                        if (i % 2 == 0)
-                        {
-                            oWS.Cells[startSubjectTable + row, 1].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.DarkOrange);
-                        }
-                        else
-                        {
-                            oWS.Cells[startSubjectTable + row, 1].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.LightSalmon);
-                        }
-                        for(int z=0; z < attas.numSlots; z++)
-                        {
-                            if (subjects[i, z].Count() > j)
-                            {
-                                int subjectId = subjects[i, z][j];
-                                oWS.Cells[startSubjectTable + row, z + 2] = $"{subjectId + 1}.{classNames[subjectId]}.{subjectNames[attas.taskSubjectMapping[subjectId]]}";
-                                oWS.Cells[startSubjectTable + row, z + 2].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.AntiqueWhite);
-                            }
-                        }
-                       row++;
-                   }
-                    taskSubjectWriteSubjectList.Increment(100.0 / (1.0 * attas.numSubjects));
-                }
-                taskSubjectWriteSubjectList.Value = 100;
-                for(int i = startSubjectTable+1;i < startSubjectTable+row; i++)
-                {
-                    for (int j = 1; j <= attas.numSlots + 1; j++)
+                    for(int z=0; z < attas.numSlots; z++)
                     {
-                        fullBorder(oWS.Cells[i, j]);
-                        taskSubjectApplyBorder.Increment(100.0 / (1.0 * (row - 1) * (attas.numSlots+1)));
+                        if (subjects[i, z].Count() > j)
+                        {
+                            int subjectId = subjects[i, z][j];
+                            oWS.Cells[startSubjectTable + row, z + 2] = $"{subjectId + 1}.{classNames[subjectId]}.{subjectNames[attas.taskSubjectMapping[subjectId]]}";
+                            if(flag[subjectId])
+                                oWS.Cells[startSubjectTable + row, z + 2].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.AntiqueWhite);
+                            else
+                                oWS.Cells[startSubjectTable + row, z + 2].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.Red);
+                        }
                     }
+                    row++;
                 }
-                taskSubjectApplyBorder.Value = 100;
-                oWS.Columns.AutoFit();
-            });
-
+            }
+            for(int i = startSubjectTable+1;i < startSubjectTable+row; i++)
+            {
+                for (int j = 1; j <= attas.numSlots + 1; j++)
+                {
+                    fullBorder(oWS.Cells[i, j]);
+                }
+            }
+            oWS.Columns.AutoFit();
+            #endregion
             oWB.SaveAs($@"{outputPath}\result_{currentTimeString}.xlsx");
             oWB.Close();
             oXL.Quit();
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.ToString());
-            //AnsiConsole.Markup($"[red]{ex.ToString()}[/]\n\n");
+            AnsiConsole.Markup($"[red]{ex.Message}[/]\n\n");
             if (oWB != null)
                 oXL.DisplayAlerts = false;
                 oWB.Close();
@@ -612,11 +508,7 @@ static void writeOutputExcel(string outputPath,ATTAS_ORTOOLS attas, List<List<(i
         AnsiConsole.Markup("\n[red]No solution to export[/]\n\n");
     }
 }
-/*
-################################
-||    CALCULATE OBJECTIVE     ||
-################################
-*/
+#region Objective Calculate
 static int calObjWalkingDistance(List<int> tasks,ATTAS_ORTOOLS attas)
 {
     int distance = 0;
@@ -651,11 +543,8 @@ static int calObjWaitingTime(List<int> tasks, ATTAS_ORTOOLS attas)
     }
     return result;
 }
-/*
-################################
-||       Excel Utility        ||
-################################
-*/
+#endregion
+#region Excel Utility
 static int[] excelToMapping(Worksheet oSheet,int numRows,int col, string[] namesArray)
 {
     int[] mapping = new int[numRows];
@@ -715,11 +604,36 @@ static void fullBorder(Range range)
 {
     range.BorderAround(XlLineStyle.xlContinuous,XlBorderWeight.xlThin);
 }
-/*
-################################
-||          Utility           ||
-################################
-*/
+static void drawChart(Worksheet oWS,ChartObjects charts,string name,string bartype,string x,string y,int[] valuearray, int offset,bool rounded)
+{
+    int[] distinctvalues = valuearray.Distinct().OrderBy(x => x).ToArray();
+    int[] distinctcount = valuearray.FindAllIndexof(distinctvalues).ToArray();
+    for (int i = 0; i < distinctvalues.Length; i++)
+    {
+        if (rounded)
+            oWS.Cells[offset * 20 + 1, i + 2] = distinctvalues[i] / 100.0;
+        else
+            oWS.Cells[offset * 20 + 1, i + 2] = distinctvalues[i];
+        oWS.Cells[offset * 20 + 1, i + 2].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.DarkOrange);
+        oWS.Cells[offset * 20 + 2, i + 2] = distinctcount[i];
+    }
+    oWS.Cells[offset * 20 + 2, 1] = bartype;
+    oWS.Cells[offset * 20 + 2, 1].Interior.Color = System.Drawing.ColorTranslator.ToOle(System.Drawing.Color.SteelBlue);
+    // OFFSET X OFF SET Y SIZE X,SIZE Y
+    ChartObject chartObject = charts.Add(0, offset * 300 + 30, 600, 270);
+    var chart = chartObject.Chart;
+    // Set chart range.
+    var range = oWS.Cells[offset * 20 + 1, 1].Resize[2, distinctvalues.Length + 1];
+    chart.SetSourceData(range);
+    // Set chart properties.
+    chart.ChartType = XlChartType.xlColumnStacked;
+    chart.ChartWizard(Source: range,
+        Title: name,
+        CategoryTitle: x,
+        ValueTitle: y);
+}
+#endregion
+#region Utility
 static int[,] toBinaryArray(int[,] data)
 {
 int numRows = data.GetLength(0);
@@ -789,3 +703,14 @@ static void cleanCOM()
     }
     while (Marshal.AreComObjectsAvailableForCleanup());
 }
+public static class EM
+{
+    public static int[] FindAllIndexof<T>(this IEnumerable<T> values, T[] val)
+    {
+        List<int> index = new List<int>();
+        for (int j = 0; j < val.Length; j++)
+            index.Add(values.Count(x => object.Equals(x, val[j])));
+        return index.ToArray();
+    }
+}
+#endregion
