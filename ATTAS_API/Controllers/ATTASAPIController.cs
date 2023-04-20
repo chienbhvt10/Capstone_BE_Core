@@ -1,8 +1,8 @@
 using ATTAS_API.Models;
-using Microsoft.AspNetCore.Mvc;
-using System.Text.Json;
 using ATTAS_API.Utils;
 using ATTAS_CORE;
+using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 using Task = ATTAS_API.Models.Task;
 
 namespace ATTAS_API.Controllers
@@ -22,75 +22,76 @@ namespace ATTAS_API.Controllers
         public IActionResult excecute([FromBody] Data data)
         {
             SqlServerConnector connector = new SqlServerConnector("SAKURA", "attas", "sa", "12345678");
-            if( connector.validToken(data.token) ) { 
-                Thread solver = new Thread(new ParameterizedThreadStart(Solve));
-                data.sessionHash = SessionStringGenerator.Generate(32);
-                solver.Start(data);
-                var hash = new { sessionId = data.sessionHash };
-                return Ok(hash);
-            }
-            else
-            {
-                var message = new { message = "Invalid Token" };
-                return BadRequest(message);
-            }
+            //if (connector.validToken(data.token))
+            //{
+            Thread solver = new Thread(new ParameterizedThreadStart(Solve));
+            data.sessionHash = SessionStringGenerator.Generate(32);
+            solver.Start(data);
+            var hash = new { sessionId = data.sessionHash };
+            return Ok(hash);
+            //}
+            //else
+            //{
+            //    var message = new { message = "Invalid Token" };
+            //    return BadRequest(message);
+            //}
         }
 
         [HttpPost("get")]
         public IActionResult get([FromBody] GetData data)
         {
             SqlServerConnector connector = new SqlServerConnector("SAKURA", "attas", "sa", "12345678");
-            if (connector.validToken(data.token))
+            //if (connector.validToken(data.token))
+            //{
+            Result result = new Result();
+            Session session = connector.getSession(data.sessionHash);
+            if (session != null)
             {
-                Result result = new Result();
-                Session session = connector.getSession(data.sessionHash);
-                if(session != null)
-                {
-                    result.status = session.statusId;
-                    result.numberofsolution = session.solutionCount;
-                }
-                else
-                {
-                    var message = new { message = "Invalid Session Hash" };
-                    return BadRequest("message");
-                }
-                Solution solution = connector.getSolution(session.id, data.solutionNo);
-                if(solution!= null)
-                {
-                    result.taskAssigned = solution.taskAssigned;
-                    result.workingDay = solution.workingDay;
-                    result.workingTime = solution.workingTime;
-                    result.waitingTime = solution.waitingTime;
-                    result.subjectDiversity= solution.subjectDiversity;
-                    result.quotaAvailable = solution.quotaAvailable;
-                    result.walkingDistance = solution.walkingDistance;
-                    result.subjectPreference = solution.subjectPreference;
-                    result.slotPreference = solution.slotPreference;
-                    result.results = connector.getResult(solution.Id,session.id);
-                }
-                var json = JsonSerializer.Serialize(result);
-                return Ok(json);
+                result.status = session.statusId;
+                result.numberofsolution = session.solutionCount;
             }
             else
             {
-                var message = new { message = "Invalid Token" };
-                return BadRequest(message);
+                var message = new { message = "Invalid Session Hash" };
+                return BadRequest("message");
             }
+            Solution solution = connector.getSolution(session.id, data.solutionNo);
+            if (solution != null)
+            {
+                result.taskAssigned = solution.taskAssigned;
+                result.workingDay = solution.workingDay;
+                result.workingTime = solution.workingTime;
+                result.waitingTime = solution.waitingTime;
+                result.subjectDiversity = solution.subjectDiversity;
+                result.quotaAvailable = solution.quotaAvailable;
+                result.walkingDistance = solution.walkingDistance;
+                result.subjectPreference = solution.subjectPreference;
+                result.slotPreference = solution.slotPreference;
+                result.results = connector.getResult(solution.Id, session.id);
+            }
+            var json = JsonSerializer.Serialize(result);
+            return Ok(json);
+            //}
+            //else
+            //{
+            //    var message = new { message = "Invalid Token" };
+            //    return BadRequest(message);
+            //}
         }
         static void Solve(object data)
         {
             Data _data = (Data)data;
-            SqlServerConnector connector = new SqlServerConnector("SAKURA","attas","sa","12345678");
+            SqlServerConnector connector = new SqlServerConnector("SAKURA", "attas", "sa", "12345678");
             int sessionId = connector.addSession(_data.sessionHash);
-            foreach(Task task in _data.tasks)
+            foreach (Task task in _data.tasks)
             {
                 connector.addTask(sessionId, task.Id, task.Order);
             }
-            foreach(Instructor instructor in _data.instructors)
+            foreach (Instructor instructor in _data.instructors)
             {
                 connector.addInstructor(sessionId, instructor.Id, instructor.Order);
             }
-            foreach(Slot slot in _data.slots)
+            foreach (Slot slot in _data.slots)
             {
                 connector.addTime(sessionId, slot.Id, slot.Order);
             }
@@ -119,7 +120,7 @@ namespace ATTAS_API.Controllers
             attas.slotConflict = listToArray(_data.slotConflict);
             attas.slotDay = listToArray(_data.slotDay);
             attas.slotTime = listToArray(_data.slotTime);
-            attas.slotSegment = new int[attas.numSlots, attas.numDays, attas.numSegments]; 
+            attas.slotSegment = new int[attas.numSlots, attas.numDays, attas.numSegments];
             for (int i = 0; i < numSegmentRule; i++)
             {
                 attas.slotSegment[_data.slotSegment[i][0], _data.slotSegment[i][1], _data.slotSegment[i][2]] = 1;
@@ -144,7 +145,7 @@ namespace ATTAS_API.Controllers
             attas.taskSubjectMapping = new int[attas.numTasks];
             attas.taskSlotMapping = new int[attas.numTasks];
             attas.taskAreaMapping = new int[attas.numTasks];
-            foreach(Task item in _data.tasks)
+            foreach (Task item in _data.tasks)
             {
                 attas.taskSubjectMapping[item.Order] = item.subjectOrder;
                 attas.taskSlotMapping[item.Order] = item.slotOrder;
@@ -155,7 +156,7 @@ namespace ATTAS_API.Controllers
                 Console.WriteLine("DEBUG: Start Solving");
             }
             List<List<(int, int)>>? results = attas.solve();
-            if (results!= null)
+            if (results != null)
             {
                 connector.updateSessionStatus(sessionId, 4, results.Count);
                 int no = 1;
@@ -194,7 +195,7 @@ namespace ATTAS_API.Controllers
                                 finalDay += objDay.Sum();
                                 finalTime += flattenArray(objTime).Sum();
                                 finalWaiting += calObjWaitingTime(tasks, attas);
-                                finalSubjectDiversity = Math.Max(finalSubjectDiversity, objSubjectDiversity.Sum() );
+                                finalSubjectDiversity = Math.Max(finalSubjectDiversity, objSubjectDiversity.Sum());
                                 finalQuotaAvailable = Math.Max(finalQuotaAvailable, attas.instructorQuota[currentId] - objQuota);
                                 finalWalkingDistance += calObjWalkingDistance(tasks, attas);
                                 finalSubjectPreference += objSubjectPreference;
@@ -249,7 +250,7 @@ namespace ATTAS_API.Controllers
                         finalSlotPreference += objSlotPreference;
                     }
 
-                    int solutionId = connector.addSolution(sessionId, no, finalQuota, finalDay,finalTime,finalWaiting,finalSubjectDiversity,finalQuotaAvailable, finalWalkingDistance, finalSubjectPreference, finalSlotPreference);
+                    int solutionId = connector.addSolution(sessionId, no, finalQuota, finalDay, finalTime, finalWaiting, finalSubjectDiversity, finalQuotaAvailable, finalWalkingDistance, finalSubjectPreference, finalSlotPreference);
                     foreach (var item in result)
                     {
                         connector.addResult(solutionId, item.Item1, item.Item2, attas.taskSlotMapping[item.Item1]);
@@ -266,7 +267,7 @@ namespace ATTAS_API.Controllers
                         Console.WriteLine(formattedResults);
                     }
                     no++;
-                } 
+                }
             }
             else
             {

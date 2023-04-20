@@ -1,6 +1,4 @@
-﻿using ATTAS_API.Models;
-using OperationsResearch;
-using System;
+using ATTAS_API.Models;
 using System.Data.SqlClient;
 
 namespace ATTAS_API.Utils
@@ -11,7 +9,8 @@ namespace ATTAS_API.Utils
 
         public SqlServerConnector(string serverName, string dbName, string username, string password)
         {
-            connectionString = $"Server={serverName};Database={dbName};User Id={username};Password={password};";
+            //connectionString = $"Server={serverName};Database={dbName};User Id={username};Password={password};";
+            connectionString = "Server=localhost;Database=attas;Trusted_Connection=True;";
         }
 
         public int addSession(string sessionHash)
@@ -135,7 +134,7 @@ namespace ATTAS_API.Utils
                 }
             }
         }
-        public int updateSessionStatus(int sessionId, int statusId,int solutionCount)
+        public int updateSessionStatus(int sessionId, int statusId, int solutionCount)
         {
             using (SqlConnection connection = new SqlConnection(connectionString))
             {
@@ -167,7 +166,7 @@ namespace ATTAS_API.Utils
                 }
             }
         }
-        public int addSolution(int sessionId, int no,int taskAssigned,int workingDay,int workingTime,int waitingTime,int subjectDiversity,int quotaAvailabe,int walkingDistance,int subjectPreference,int slotPreference)
+        public int addSolution(int sessionId, int no, int taskAssigned, int workingDay, int workingTime, int waitingTime, int subjectDiversity, int quotaAvailabe, int walkingDistance, int subjectPreference, int slotPreference)
         {
             using (SqlConnection connection = new SqlConnection(connectionString))
             {
@@ -205,7 +204,7 @@ namespace ATTAS_API.Utils
                 }
             }
         }
-        public int addResult(int solutionId,int taskId,int instructorId,int timeId)
+        public int addResult(int solutionId, int taskId, int instructorId, int timeId)
         {
             using (SqlConnection connection = new SqlConnection(connectionString))
             {
@@ -305,7 +304,7 @@ namespace ATTAS_API.Utils
                 return null;
             }
         }
-        public Solution getSolution(int sessionId,int no)
+        public Solution getSolution(int sessionId, int no)
         {
             Solution solution = new Solution();
             using (SqlConnection connection = new SqlConnection(connectionString))
@@ -329,7 +328,7 @@ namespace ATTAS_API.Utils
                             solution.workingTime = (int)reader[5];
                             solution.waitingTime = (int)reader[6];
                             solution.subjectDiversity = (int)reader[7];
-                            solution.quotaAvailable= (int)reader[8];
+                            solution.quotaAvailable = (int)reader[8];
                             solution.walkingDistance = (int)reader[9];
                             solution.subjectPreference = (int)reader[10];
                             solution.slotPreference = (int)reader[11];
@@ -351,7 +350,7 @@ namespace ATTAS_API.Utils
                 return null;
             }
         }
-        public List<Assigned> getResult(int solutionId,int sessionId)
+        public List<Assigned> getResult(int solutionId, int sessionId)
         {
             List<Assigned> assigneds = new List<Assigned>();
             using (SqlConnection connection = new SqlConnection(connectionString))
@@ -368,10 +367,10 @@ namespace ATTAS_API.Utils
                         {
                             Assigned assigned = new Assigned();
                             assigned.taskId = getBusinessId("task", sessionId, (int)reader[2]);
-                            assigned.instructorId = getBusinessId("instructor",sessionId, (int)reader[3]);
+                            assigned.instructorId = getBusinessId("instructor", sessionId, (int)reader[3]);
                             assigned.slotId = getBusinessId("time", sessionId, (int)reader[4]);
                             assigneds.Add(assigned);
-                            
+
                         }
                         reader.Close();
                         connection.Close();
@@ -390,7 +389,7 @@ namespace ATTAS_API.Utils
                 return null;
             }
         }
-        public string getBusinessId(string table,int sessionId,int order)
+        public string getBusinessId(string table, int sessionId, int order)
         {
             using (SqlConnection connection = new SqlConnection(connectionString))
             {
@@ -410,7 +409,7 @@ namespace ATTAS_API.Utils
                             connection.Close();
                             return tmp;
                         }
-                        
+
                     }
                 }
                 catch (Exception ex)
